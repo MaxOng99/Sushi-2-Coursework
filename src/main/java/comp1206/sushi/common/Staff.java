@@ -1,8 +1,4 @@
 package comp1206.sushi.common;
-
-import java.util.Map;
-import java.util.Map.Entry;
-
 import comp1206.sushi.server.DishStockManager;
 
 public class Staff extends Model implements UpdateListener, Runnable{
@@ -11,11 +7,12 @@ public class Staff extends Model implements UpdateListener, Runnable{
 	private DishStockManager stockManager;
 	private String status;
 	private Number fatigue;
+	private Thread kitchenStaff;
 	
 	public Staff(String name) {
 		this.setName(name);
 		this.setFatigue(0);
-		Thread kitchenStaff = new Thread(this);
+		kitchenStaff = new Thread(this);
 		kitchenStaff.start();
 	}
 
@@ -56,8 +53,9 @@ public class Staff extends Model implements UpdateListener, Runnable{
 	
 	@Override
 	public void run() {
+		
 		while(true) {
-			stockManager.checkStockAndRestock(this);
+			stockManager.queueRestockWay(this);
 		}
 	}
 }

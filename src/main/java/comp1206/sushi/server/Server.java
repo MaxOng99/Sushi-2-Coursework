@@ -31,7 +31,6 @@ public class Server implements ServerInterface, UpdateListener{
    //private static final Logger logger = LogManager.getLogger("Server");
 	
 	public Restaurant restaurant;
-	private boolean configStatus;
 	private ArrayList<ServerMessageManager> msgManagers = new ArrayList<>();
 	public ArrayList<Dish> dishes = new ArrayList<Dish>();
 	public ArrayList<Drone> drones = new ArrayList<Drone>();
@@ -47,7 +46,8 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	public Server() {
 		//logger.info("Starting up server...");
-		loadConfiguration("C:\\Users\\BoBoRen\\Desktop\\Sem2\\Programming II\\Coursework2\\sushi\\sushi\\Test.txt");
+		//ingredientManager = new IngredientStockManager();
+		loadConfiguration("C:\\Users\\BoBoRen\\Documents\\Test3.txt");
 		Thread listenForClientThread = new Thread(new ClientListener());
 		listenForClientThread.start();
 	}
@@ -196,6 +196,7 @@ public class Server implements ServerInterface, UpdateListener{
 	@Override
 	public Staff addStaff(String name) {
 		Staff mock = new Staff(name);
+		mock.setStatus("Idle");
 		mock.setDishStckManager(dishManager);
 		mock.addUpdateListener(this);
 		this.staff.add(mock);
@@ -305,7 +306,8 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public void loadConfiguration(String filename) {
-		Configuration config = new Configuration(filename, this);
+		dishManager = new DishStockManager();
+		Configuration config = new Configuration(filename, this, dishManager);
 		dishManager = config.getDishStockManager();
 		ingredientManager = new IngredientStockManager(config.getIngredientStock());
 		restaurant = config.getRestaurant();

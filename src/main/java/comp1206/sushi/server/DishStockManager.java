@@ -1,61 +1,66 @@
 package comp1206.sushi.server;
-
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Random;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Staff;
 
+
 public class DishStockManager {
 	
-	Lock stockManagerLock = new ReentrantLock();
-	
-	private Map<Dish, Number> dishStock;	
+	private Random restockTime = new Random();
+	private Map<Dish, Number> dishStock;
+	private BlockingQueue<Dish> queue = new ArrayBlockingQueue<Dish>(10);
 	
 	public DishStockManager() {
-		dishStock = new HashMap<>();
+		dishStock = new ConcurrentHashMap<>();
 	}
+	
 	public Map<Dish, Number> getDishStockLevels() {
 		return dishStock;
 	}
 	
-	
-	public Map<Dish, Number> getStockWithLock() {
-		stockManagerLock.lock();
+	public synchronized void setStock(Dish dish, Number quantity){	
+		int dishQuantity = (int) dishStock.get(dish);
+		int newDishQuantity = dishQuantity + (int) + (int) quantity;
+		dishStock.replace(dish, newDishQuantity);
 		
-		
-		return dishStock;
-	}
-	
-	public void checkStockAndRestock(Staff staff) {
-		stockManagerLock.lock();
-		for (Entry<Dish, Number> dishQttyPair: dishStock.entrySet()) {
-			lock(dishQttyPair);
-			Dish currentDish = dishQttyPair.getKey();
-			Number currentQuantity = dishQttyPair.getValue();
-			while((int) currentQuantity < (int) currentDish.getRestockThreshold()) {
-				staff.setStatus("Restocking...");
-				System.out.println(staff.getStatus());
-				currentQuantity = (int) currentQuantity + (int) currentDish.getRestockAmount();
-				setStock(currentDish, currentDish.getRestockAmount());
-				try {
-					Thread.sleep(5500);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+		if (newDishQuantity < (int) dish.getRestockThreshold()) {
+			try {
+				if (queue.contains(dish)) {
+					System.out.println("Nope");
 				}
+				else {
+					queue.put(dish);
+				}
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		}
-		staff.setStatus("Idle");
-		stockManagerLock.unlock();
 	}
 	
-	
-	public void setStock(Dish dish, Number quantity){
-		int dishQuantity = (int) dishStock.get(dish);
-		int newDishQuantity = (int) quantity;
-		dishStock.replace(dish, dishQuantity + newDishQuantity);
+	public void queueRestockWay(Staff staff) {
+		try {
+			Dish dishTaken = queue.take();
+			int currentStockValue = (int)dishStock.get(dishTaken);
+			int restockThreshold = (int) dishTaken.getRestockThreshold();
+			int restockAmount = (int) dishTaken.getRestockAmount();
+			
+			while(currentStockValue < restockThreshold) {
+				staff.setStatus("Restocking " + dishTaken + "...");
+				Thread.sleep(restockTime.nextInt(40001) + 30000);
+				dishStock.replace(dishTaken, restockAmount + currentStockValue);
+				currentStockValue += restockAmount;
+			}
+			
+			staff.setStatus("Idle");
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 }

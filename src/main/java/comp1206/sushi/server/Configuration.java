@@ -31,14 +31,14 @@ public class Configuration {
 	private List<User> users;
 	private List<Dish> dishes;
 	
-	public Configuration(String filename, Server server) {
+	public Configuration(String filename, Server server, DishStockManager serverStockManager) {
 		this.filename=filename;
 		this.server = server;	
 		this.ingredientStock = new HashMap<>();
 		this.dishStock = new HashMap<>();
 		this.users = new ArrayList<>();
 		this.dishes = new ArrayList<>();
-		this.dishStockManager = new DishStockManager();
+		this.dishStockManager = serverStockManager;
 		removeServerData();
 		
 		try {
@@ -58,6 +58,7 @@ public class Configuration {
 		server.getUsers().clear();
 		server.getOrders().clear();
 		server.getPostcodes().clear();
+		this.dishStockManager.getDishStockLevels().clear();
 	}
 	
 	public void readLine() throws FileNotFoundException {
@@ -93,8 +94,7 @@ public class Configuration {
 				}
 				
 				else if (line.contains("STAFF")) {
-					Staff configStaff = server.addStaff(splitted[1]);
-					configStaff.setDishStckManager(dishStockManager);
+					server.addStaff(splitted[1]);
 				}
 				
 				else if (line.contains("DRONE")) {
