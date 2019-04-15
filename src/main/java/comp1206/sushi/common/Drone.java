@@ -2,7 +2,7 @@ package comp1206.sushi.common;
 
 import comp1206.sushi.common.Drone;
 
-public class Drone extends Model {
+public class Drone extends Model implements Runnable{
 
 	private Number speed;
 	private Number progress;
@@ -88,6 +88,11 @@ public class Drone extends Model {
 	public void setStatus(String status) {
 		notifyUpdate("status",this.status,status);
 		this.status = status;
+	}
+
+	@Override
+	public void run() {
+		
 	}
 	
 }

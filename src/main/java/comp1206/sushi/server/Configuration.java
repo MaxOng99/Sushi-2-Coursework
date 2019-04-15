@@ -9,12 +9,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import comp1206.sushi.common.Basket;
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Ingredient;
 import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Postcode;
 import comp1206.sushi.common.Restaurant;
-import comp1206.sushi.common.Staff;
 import comp1206.sushi.common.Supplier;
 //import org.apache.commons.lang3.StringUtils;
 import comp1206.sushi.common.User;
@@ -25,20 +25,18 @@ public class Configuration {
 	private String filename;
 	private Postcode restaurantPostcode;
 	private String restaurantName;
-	private Map<Ingredient, Number> ingredientStock;
-	private Map<Dish, Number> dishStock;
 	private DishStockManager dishStockManager;
+	private IngredientStockManager ingredientStockManager;
 	private List<User> users;
 	private List<Dish> dishes;
 	
-	public Configuration(String filename, Server server, DishStockManager serverStockManager) {
+	public Configuration(String filename, Server server, DishStockManager serverStockManager, IngredientStockManager serverIngredientManager) {
 		this.filename=filename;
 		this.server = server;	
-		this.ingredientStock = new HashMap<>();
-		this.dishStock = new HashMap<>();
 		this.users = new ArrayList<>();
 		this.dishes = new ArrayList<>();
 		this.dishStockManager = serverStockManager;
+		this.ingredientStockManager = serverIngredientManager;
 		removeServerData();
 		
 		try {
@@ -75,12 +73,10 @@ public class Configuration {
 				
 				else if (line.contains("RESTAURANT")) {
 					restaurantName = splitted[1];
-					
-					for (Postcode current: server.getPostcodes()) {
-						if (current.getName().equals(splitted[2])) {
-							restaurantPostcode = current;
-						}
-					}
+					server.addPostcode(splitted[2]);
+					restaurantPostcode = new Postcode(splitted[2]);
+					Restaurant restaurant = new Restaurant(restaurantName, restaurantPostcode);
+					server.setRestaurant(restaurant);
 				}
 				
 				else if (line.contains("SUPPLIER")) {
@@ -149,7 +145,6 @@ public class Configuration {
 						if (dish.getName().equals(splitted[1])) {
 							if (validateNumeric(splitted[2])) {
 								int dishStock = Integer.parseInt(splitted[2]);
-								//this.dishStock.put(dish, dishStock);
 								this.dishStockManager.getDishStockLevels().put(dish, dishStock);
 								break;
 							}
@@ -160,7 +155,7 @@ public class Configuration {
 						if (ingredient.getName().equals(splitted[1])) {
 							if (validateNumeric(splitted[2])) {
 								int ingredientStock = Integer.parseInt(splitted[2]);
-								this.ingredientStock.put(ingredient, ingredientStock);
+								this.ingredientStockManager.getIngredientStockLevel().put(ingredient, ingredientStock);
 								break;
 							}
 						}
@@ -184,13 +179,20 @@ public class Configuration {
 					for (User current: users) {
 						String userName = splitted[1];
 						if (current.getName().equals(userName)) {
+							Basket userBasket = current.getBasket();
 							String[] orders = splitted[2].split(",");
 							for (String currentOrder: orders) {
-								String[] orderQuantityPair = currentOrder.split(" * ");
-								int quantity = Integer.parseInt(orderQuantityPair[0]);
-								server.addOrder(new Order(current));
-								
+								String[] orderQuantityPair = currentOrder.split(" \\* ");
+								for (Dish currentDish: server.getDishes()) {
+									if (currentDish.getName().equals(orderQuantityPair[1])) {
+										int quantity = Integer.parseInt(orderQuantityPair[0]);
+										userBasket.addDishToBasket(currentDish, quantity);
+									}
+								}
 							}
+							
+							userBasket.setBasketContent();
+							server.addOrder(new Order(current));
 						}
 					}
 				}
@@ -199,14 +201,6 @@ public class Configuration {
 		catch(IOException e) {
 			System.err.print(e.getMessage());
 		}
-	}
-	
-	public Map<Dish, Number> getDishStock() {
-		return this.dishStock;
-	}
-	
-	public Map<Ingredient, Number> getIngredientStock() {
-		return this.ingredientStock;
 	}
 	public boolean validateNumeric(String value) {
 		/*
@@ -220,12 +214,11 @@ public class Configuration {
 		return true;
 	}
 	
-	public Restaurant getRestaurant() {
-		Restaurant restaurant = new Restaurant(restaurantName, restaurantPostcode);
-		return restaurant;
-	}
-	
 	public DishStockManager getDishStockManager() {
 		return dishStockManager;
+	}
+	
+	public IngredientStockManager getIngredientStockManager() {
+		return ingredientStockManager;
 	}
 }

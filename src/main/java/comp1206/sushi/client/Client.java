@@ -5,6 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import comp1206.sushi.common.Basket;
+
 //import org.apache.logging.log4j.LogManager;
 //import org.apache.logging.log4j.Logger;
 
@@ -18,7 +23,7 @@ import comp1206.sushi.common.User;
 
 public class Client implements ClientInterface {
 
-    //private static final Logger logger = LogManager.getLogger("Client");
+    private static final Logger logger = LogManager.getLogger("Client");
     
     public Restaurant restaurant;
 	public ArrayList<Dish> dishes;
@@ -29,8 +34,8 @@ public class Client implements ClientInterface {
 	
 	public Client() {
 		try {
-			//logger.info("Starting up client...");
-			//logger.info("Connecting to server...");
+			logger.info("Starting up client...");
+			logger.info("Connecting to server...");
 			connectToServer();
 		}
 		catch(Exception e) {
@@ -38,16 +43,19 @@ public class Client implements ClientInterface {
 			System.out.println(e.getMessage());
 			System.exit(1);
 		}
-        Postcode restaurantPostcode = new Postcode("SO17 1BJ");
-		restaurant = new Restaurant("Mock Restaurant",restaurantPostcode);
 		
-		Postcode postcode1 = new Postcode("SO17 1TJ");
-		Postcode postcode2 = new Postcode("SO17 1BX");
-		Postcode postcode3 = new Postcode("SO17 2NJ");
-		Postcode postcode4 = new Postcode("SO17 1TW");
-		Postcode postcode5 = new Postcode("SO17 2LB");
 		
-		postcodes.add(restaurantPostcode);
+	}
+	
+	public void setRestaurantAndPostcodes(Restaurant restaurant) {
+		this.restaurant = restaurant;
+		
+		Postcode postcode1 = new Postcode("SO17 1TJ", restaurant);
+		Postcode postcode2 = new Postcode("SO17 1BX", restaurant);
+		Postcode postcode3 = new Postcode("SO17 2NJ", restaurant);
+		Postcode postcode4 = new Postcode("SO17 1TW", restaurant);
+		Postcode postcode5 = new Postcode("SO17 2LB", restaurant);
+		
 		postcodes.add(postcode1);
 		postcodes.add(postcode2);
 		postcodes.add(postcode3);
@@ -154,6 +162,8 @@ public class Client implements ClientInterface {
 
 	@Override
 	public Order checkoutBasket(User user) {
+		Basket userBasket = user.getBasket();
+		userBasket.setBasketContent();
 		Order newOrder = new Order(user);
 		newOrder.setStatus("Incomplete");
 		user.addNewOrder(newOrder);

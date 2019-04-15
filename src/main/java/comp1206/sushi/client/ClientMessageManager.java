@@ -10,6 +10,7 @@ import java.util.Map;
 
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Order;
+import comp1206.sushi.common.Restaurant;
 import comp1206.sushi.common.User;
 
 public class ClientMessageManager implements Runnable{
@@ -58,10 +59,7 @@ public class ClientMessageManager implements Runnable{
 		
 		else if (details.equals("CancelOrder")) {
 			try {
-				Order orderToCancel = (Order) object;
-				orderToCancel.setStatus("Canceled");
-				orderRequests.put("Cancel", orderToCancel);
-				requestCancelOrder(orderRequests);
+				requestCancelOrder((Order) object);
 			}
 			catch(IOException e) {
 				e.printStackTrace();
@@ -80,6 +78,11 @@ public class ClientMessageManager implements Runnable{
 				
 				else if (objectReceived instanceof ArrayList<?>) {
 					client.setDishes((ArrayList<Dish>) objectReceived);
+				}
+				
+				else if (objectReceived instanceof Restaurant) {
+					Restaurant serverRestaurant = (Restaurant) objectReceived;
+					client.setRestaurantAndPostcodes(serverRestaurant);
 				}
 			}
 			
@@ -119,14 +122,16 @@ public class ClientMessageManager implements Runnable{
 	}	
 	
 	public void notifyNewOrder(Order order) throws IOException {
+		System.out.println(order.getName());
 		output.writeUnshared(order);
 		output.flush();
 		output.reset();
 	}
 	
-	public void requestCancelOrder(Map<String, Order> orderRequests) throws IOException {
-		output.writeObject(orderRequests);
+	public void requestCancelOrder(Order orderToCancel) throws IOException {
+		output.writeObject(orderToCancel);
 		output.flush();
 		output.reset();
+		System.out.println("Message sent!!");
 	}
 }

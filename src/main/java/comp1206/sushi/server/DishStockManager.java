@@ -6,6 +6,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 import comp1206.sushi.common.Dish;
+import comp1206.sushi.common.Drone;
 import comp1206.sushi.common.Staff;
 
 
@@ -13,7 +14,8 @@ public class DishStockManager {
 	
 	private Random restockTime = new Random();
 	private Map<Dish, Number> dishStock;
-	private BlockingQueue<Dish> queue = new ArrayBlockingQueue<Dish>(10);
+	private BlockingQueue<Dish> dishRestockQueue = new ArrayBlockingQueue<Dish>(10);
+	private BlockingQueue<Dish> dishDeliveryQueue = new ArrayBlockingQueue<Dish>(10);
 	
 	public DishStockManager() {
 		dishStock = new ConcurrentHashMap<>();
@@ -30,11 +32,11 @@ public class DishStockManager {
 		
 		if (newDishQuantity < (int) dish.getRestockThreshold()) {
 			try {
-				if (queue.contains(dish)) {
+				if (dishRestockQueue.contains(dish)) {
 					System.out.println("Nope");
 				}
 				else {
-					queue.put(dish);
+					dishRestockQueue.put(dish);
 				}
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
@@ -45,7 +47,7 @@ public class DishStockManager {
 	
 	public void queueRestockWay(Staff staff) {
 		try {
-			Dish dishTaken = queue.take();
+			Dish dishTaken = dishRestockQueue.take();
 			int currentStockValue = (int)dishStock.get(dishTaken);
 			int restockThreshold = (int) dishTaken.getRestockThreshold();
 			int restockAmount = (int) dishTaken.getRestockAmount();
@@ -62,5 +64,9 @@ public class DishStockManager {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+	
+	public void deliverDish(Drone drone) {
+		
 	}
 }

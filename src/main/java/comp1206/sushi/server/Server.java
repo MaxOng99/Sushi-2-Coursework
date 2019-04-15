@@ -6,17 +6,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import javax.swing.JFrame;
 
 //import org.apache.logging.log4j.LogManager;
 //import org.apache.logging.log4j.Logger;
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Drone;
 import comp1206.sushi.common.Ingredient;
+import comp1206.sushi.common.Model;
 import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Postcode;
 import comp1206.sushi.common.Restaurant;
@@ -46,12 +44,14 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	public Server() {
 		//logger.info("Starting up server...");
-		//ingredientManager = new IngredientStockManager();
 		loadConfiguration("C:\\Users\\BoBoRen\\Documents\\Test3.txt");
 		Thread listenForClientThread = new Thread(new ClientListener());
 		listenForClientThread.start();
 	}
 	
+	public void setRestaurant(Restaurant restaurant) {
+		this.restaurant = restaurant;
+	}
 	public class ClientListener implements Runnable{
 		
 		public void run() {
@@ -204,6 +204,7 @@ public class Server implements ServerInterface, UpdateListener{
 	}
 	
 	public void addOrder(Order order) {
+		order.setStatus("Incomplete");
 		orders.add(order);
 	}
 	@Override
@@ -231,7 +232,7 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public Map<Ingredient, Number> getIngredientStockLevels() {
-		return ingredientManager.getIngredientStockLevels();
+		return ingredientManager.getIngredientStockLevel();
 	}
 
 	@Override
@@ -276,7 +277,14 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public Postcode addPostcode(String code) {
-		Postcode mock = new Postcode(code);
+		Postcode mock;
+		if (restaurant!= null) {
+			mock = new Postcode(code, restaurant);
+		}
+		
+		else {
+			mock = new Postcode(code);
+		}
 		mock.addUpdateListener(this);
 		this.postcodes.add(mock);
 		this.notifyUpdate();
@@ -307,10 +315,10 @@ public class Server implements ServerInterface, UpdateListener{
 	@Override
 	public void loadConfiguration(String filename) {
 		dishManager = new DishStockManager();
-		Configuration config = new Configuration(filename, this, dishManager);
+		ingredientManager = new IngredientStockManager();
+		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);
 		dishManager = config.getDishStockManager();
-		ingredientManager = new IngredientStockManager(config.getIngredientStock());
-		restaurant = config.getRestaurant();
+		ingredientManager = config.getIngredientStockManager();
 		
 		for (ServerMessageManager current: msgManagers) {
 			current.notifyClient();
@@ -429,5 +437,6 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	@Override
 	public void updated(UpdateEvent updateEvent) {
+		Model modelUpdated = updateEvent.model;
 	}
 }

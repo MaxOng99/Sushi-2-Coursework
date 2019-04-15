@@ -13,8 +13,8 @@ public class Order extends Model implements Serializable {
 	private String status;
 	private Number cost;
 	private User user;
-	private String date;
 	private Basket basket;
+	private String name;
 	
 	public Order(User user) {
 		DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/YYYY HH:mm:ss");  
@@ -26,7 +26,7 @@ public class Order extends Model implements Serializable {
 	}
 
 	public Number getDistance() {
-		return 1;
+		return user.getDistance();
 	}
 
 	@Override

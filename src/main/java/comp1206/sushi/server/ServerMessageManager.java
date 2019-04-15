@@ -6,14 +6,14 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import javax.swing.JFrame;
-
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Order;
+import comp1206.sushi.common.Restaurant;
+import comp1206.sushi.common.UpdateEvent;
+import comp1206.sushi.common.UpdateListener;
 import comp1206.sushi.common.User;
 
 public class ServerMessageManager implements Runnable{
@@ -23,13 +23,22 @@ public class ServerMessageManager implements Runnable{
 	private ObjectOutputStream output;
 	private ObjectInputStream input;
 	private InetAddress clientIP;
+	private UpdateListener serverListener;
 	
 	public ServerMessageManager(Socket socket, Server server) throws IOException{
+		
 		this.server = server;
 		this.serverSocket = socket;
 		this.clientIP = socket.getInetAddress();
 		this.output = new ObjectOutputStream(socket.getOutputStream());
 		this.input = new ObjectInputStream(socket.getInputStream());	
+		this.serverListener = server;
+	}
+	
+	public void notifyUpdate(Object object) {
+		if (object instanceof Order) {
+			serverListener.updated(new UpdateEvent((Order) object));
+		}
 	}
 	
 	@Override
@@ -64,31 +73,34 @@ public class ServerMessageManager implements Runnable{
 				
 				else if (objectReceived instanceof Order) {
 					Order order = (Order) objectReceived;
-					server.addOrder(order);
-					Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
-					for (Entry<Dish, Number> dishQttyPair: dishesOrdered.entrySet()) {
-						
-						for (Dish dish: server.getDishes()) {
-							if (dish.getName().equals(dishQttyPair.getKey().getName())) {
-								server.setStock(dish, -(int) dishQttyPair.getValue());
-							}
-						}
-					}
-				}
-				
-				else if (objectReceived instanceof HashMap<?, ?>) {
-					HashMap<String, Order> orderRequests = (HashMap<String, Order>) objectReceived;
 					
-					for (Entry<String, Order> current: orderRequests.entrySet()) {
-						if (current.getKey().equals("Cancel")) {
-							Order orderToCancel = current.getValue();
-							if (server.getOrders().contains(orderToCancel)) {
-								orderToCancel.setStatus("Canceled");
+					if (order.getStatus().equals("Incomplete")) {
+						server.addOrder(order);
+						Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
+						for (Entry<Dish, Number> dishQttyPair: dishesOrdered.entrySet()) {
+							
+							for (Dish dish: server.getDishes()) {
+								if (dish.getName().equals(dishQttyPair.getKey().getName())) {
+									server.setStock(dish, -(int) dishQttyPair.getValue());
+								}
 							}
 						}
+						this.notifyUpdate(order);
 					}
-				}
-				
+					
+					else if (order.getStatus().equals("Canceled")) {
+						for (Order current: server.getOrders()) {
+							if(current.equals(order)) {
+								current.setStatus("Canceled");
+							}
+							else {
+								System.out.println("Something went wrong");
+							}
+							
+						}
+					}
+					
+				}	
 			} catch (ClassNotFoundException | IOException e) {
 				try {
 					System.out.println("Lost connection to Client " + clientIP);
@@ -108,9 +120,21 @@ public class ServerMessageManager implements Runnable{
 		try {
 			output.writeObject(serverDishes2);
 			output.flush();
+			output.reset();
 		}
 		catch(IOException zzz) {
 			zzz.printStackTrace();
+		}
+		
+		Restaurant restaurant = server.getRestaurant();
+		try {
+			output.writeObject(restaurant);
+			output.flush();
+			output.reset();
+		}
+		
+		catch(IOException eee) {
+			eee.printStackTrace();
 		}
 	}
 }

@@ -10,12 +10,33 @@ public class Basket implements Serializable{
 	private static final long serialVersionUID = -1803572769884618746L;
 	private int cost;
 	private Map<Dish, Number> basketMap;
+	private String displayBasketContents;
 	
 	public Basket() {
 		cost = 0;
 		basketMap = new HashMap<>();
+		displayBasketContents = "{ }";
 	}
 
+	public String toString() {
+		return displayBasketContents;
+	}
+	
+	public void setBasketContent() {	
+		
+		displayBasketContents = "";
+		if (basketMap.size() > 1) {
+			for (Entry<Dish, Number> current: basketMap.entrySet()) {
+				displayBasketContents += "{ " + current.getKey() + "=" + current.getValue() + " },";
+			}
+		}
+		else {
+			for (Entry<Dish, Number> current: basketMap.entrySet()) {
+				displayBasketContents = "{ " + current.getKey() + "=" + current.getValue() + " }";
+			}	
+		}
+		
+	}
 	
 	public void addDishToBasket(Dish dish, Number quantity) {
 		if (basketMap.containsKey(dish)) {
