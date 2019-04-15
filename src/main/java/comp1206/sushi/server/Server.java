@@ -1,6 +1,7 @@
 package comp1206.sushi.server;
 
 import java.net.ServerSocket;
+
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,12 +10,11 @@ import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-//import org.apache.logging.log4j.LogManager;
-//import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Drone;
 import comp1206.sushi.common.Ingredient;
-import comp1206.sushi.common.Model;
 import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Postcode;
 import comp1206.sushi.common.Restaurant;
@@ -26,24 +26,25 @@ import comp1206.sushi.common.User;
  
 public class Server implements ServerInterface, UpdateListener{
 
-   //private static final Logger logger = LogManager.getLogger("Server");
+   private static final Logger logger = LogManager.getLogger("Server");
 	
-	public Restaurant restaurant;
+	private Restaurant restaurant = null;
 	private ArrayList<ServerMessageManager> msgManagers = new ArrayList<>();
-	public ArrayList<Dish> dishes = new ArrayList<Dish>();
-	public ArrayList<Drone> drones = new ArrayList<Drone>();
-	public ArrayList<Ingredient> ingredients = new ArrayList<Ingredient>();
-	public ArrayList<Order> orders = new ArrayList<Order>();
-	public ArrayList<Staff> staff = new ArrayList<Staff>();
-	public ArrayList<Supplier> suppliers = new ArrayList<Supplier>();
-	public ArrayList<User> users = new ArrayList<User>();
-	public ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
+	private ArrayList<Dish> dishes = new ArrayList<Dish>();
+	private ArrayList<Drone> drones = new ArrayList<Drone>();
+	private ArrayList<Ingredient> ingredients = new ArrayList<Ingredient>();
+	private ArrayList<Order> orders = new ArrayList<Order>();
+	private ArrayList<Staff> staff = new ArrayList<Staff>();
+	private ArrayList<Supplier> suppliers = new ArrayList<Supplier>();
+	private ArrayList<User> users = new ArrayList<User>();
+	private ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
-	private DishStockManager dishManager;
-	private IngredientStockManager ingredientManager;
+	
+	private IngredientStockManager ingredientManager = new IngredientStockManager();
+	private DishStockManager dishManager = new DishStockManager(ingredientManager);
 	
 	public Server() {
-		//logger.info("Starting up server...");
+		logger.info("Starting up server...");
 		loadConfiguration("C:\\Users\\BoBoRen\\Documents\\Test3.txt");
 		Thread listenForClientThread = new Thread(new ClientListener());
 		listenForClientThread.start();
@@ -52,6 +53,7 @@ public class Server implements ServerInterface, UpdateListener{
 	public void setRestaurant(Restaurant restaurant) {
 		this.restaurant = restaurant;
 	}
+	
 	public class ClientListener implements Runnable{
 		
 		public void run() {
@@ -68,11 +70,14 @@ public class Server implements ServerInterface, UpdateListener{
 			ExecutorService executors = Executors.newFixedThreadPool(10);
 			Socket socket = null;
 			while (true) {
-				ServerMessageManager newMsgManager = new ServerMessageManager(serverSock.accept(), Server.this);
+				ServerMessageManager newMsgManager = new ServerMessageManager(socket = serverSock.accept(), Server.this);
 				msgManagers.add(newMsgManager);
 				newMsgManager.notifyClient();
 				executors.execute((newMsgManager));
-				//logger.info("Connection to client " + socket.getInetAddress());
+				
+				if (socket!= null && socket.isConnected()) {
+					logger.info("Connection to client " + socket.getInetAddress());
+				}
 			}
 		}
 	}
@@ -205,6 +210,7 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	public void addOrder(Order order) {
 		order.setStatus("Incomplete");
+		order.addUpdateListener(this);
 		orders.add(order);
 	}
 	@Override
@@ -277,14 +283,12 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public Postcode addPostcode(String code) {
-		Postcode mock;
+		Postcode mock = new Postcode(code);
+		
 		if (restaurant!= null) {
-			mock = new Postcode(code, restaurant);
+			mock.calculateDistance(restaurant);
 		}
 		
-		else {
-			mock = new Postcode(code);
-		}
 		mock.addUpdateListener(this);
 		this.postcodes.add(mock);
 		this.notifyUpdate();
@@ -314,11 +318,7 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public void loadConfiguration(String filename) {
-		dishManager = new DishStockManager();
-		ingredientManager = new IngredientStockManager();
 		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);
-		dishManager = config.getDishStockManager();
-		ingredientManager = config.getIngredientStockManager();
 		
 		for (ServerMessageManager current: msgManagers) {
 			current.notifyClient();
@@ -437,6 +437,15 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	@Override
 	public void updated(UpdateEvent updateEvent) {
-		Model modelUpdated = updateEvent.model;
+		
+		String modelName = updateEvent.model.getName();
+		String updateProperty = updateEvent.property;
+		Object oldValue = updateEvent.oldValue;
+		Object newValue = updateEvent.newValue;
+		
+		if (oldValue != newValue) {
+			System.out.println(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
+			logger.info(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
+		}
 	}
 }

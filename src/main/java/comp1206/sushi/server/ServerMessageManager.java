@@ -1,6 +1,7 @@
 package comp1206.sushi.server;
 
 import java.io.IOException;
+
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
@@ -12,8 +13,6 @@ import java.util.Map.Entry;
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Restaurant;
-import comp1206.sushi.common.UpdateEvent;
-import comp1206.sushi.common.UpdateListener;
 import comp1206.sushi.common.User;
 
 public class ServerMessageManager implements Runnable{
@@ -23,7 +22,6 @@ public class ServerMessageManager implements Runnable{
 	private ObjectOutputStream output;
 	private ObjectInputStream input;
 	private InetAddress clientIP;
-	private UpdateListener serverListener;
 	
 	public ServerMessageManager(Socket socket, Server server) throws IOException{
 		
@@ -32,13 +30,6 @@ public class ServerMessageManager implements Runnable{
 		this.clientIP = socket.getInetAddress();
 		this.output = new ObjectOutputStream(socket.getOutputStream());
 		this.input = new ObjectInputStream(socket.getInputStream());	
-		this.serverListener = server;
-	}
-	
-	public void notifyUpdate(Object object) {
-		if (object instanceof Order) {
-			serverListener.updated(new UpdateEvent((Order) object));
-		}
 	}
 	
 	@Override
@@ -85,18 +76,14 @@ public class ServerMessageManager implements Runnable{
 								}
 							}
 						}
-						this.notifyUpdate(order);
 					}
 					
 					else if (order.getStatus().equals("Canceled")) {
 						for (Order current: server.getOrders()) {
-							if(current.equals(order)) {
+							if(current.getName().equals(order.getName())) {
 								current.setStatus("Canceled");
+								break;
 							}
-							else {
-								System.out.println("Something went wrong");
-							}
-							
 						}
 					}
 					

@@ -47,7 +47,7 @@ public class Postcode extends Model implements Serializable{
 	 * Calculates the distance between two points on the surface of Earth based on Haversine formula 
 	 * @param restaurant This parameter is needed to get the Postcode of the Restaurant
 	 */
-	protected void calculateDistance(Restaurant restaurant) {
+	public void calculateDistance(Restaurant restaurant) {
 		Postcode destination = restaurant.getLocation();
 		double restaurantLat = destination.getLatLong().get("lat");
 		double restaurantLon = destination.getLatLong().get("lon");
@@ -71,7 +71,7 @@ public class Postcode extends Model implements Serializable{
 	/**
 	 * Calculates the lat/long of a Postcode 
 	 */
-	protected void calculateLatLong() {
+	public void calculateLatLong() {
 		
 		//Removes white space in the PostcodeS, because GET parameter requires PostcodeS w/o spaces
 		String postcode = this.name.replaceAll("\\s+", "");

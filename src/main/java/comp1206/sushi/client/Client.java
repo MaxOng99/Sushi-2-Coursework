@@ -21,7 +21,7 @@ import comp1206.sushi.common.UpdateEvent;
 import comp1206.sushi.common.UpdateListener;
 import comp1206.sushi.common.User;
 
-public class Client implements ClientInterface {
+public class Client implements ClientInterface, UpdateListener {
 
     private static final Logger logger = LogManager.getLogger("Client");
     
@@ -35,6 +35,19 @@ public class Client implements ClientInterface {
 	public Client() {
 		try {
 			logger.info("Starting up client...");
+			
+			Postcode postcode1 = new Postcode("SO17 1TJ");
+			Postcode postcode2 = new Postcode("SO17 1BX");
+			Postcode postcode3 = new Postcode("SO17 2NJ");
+			Postcode postcode4 = new Postcode("SO17 1TW");
+			Postcode postcode5 = new Postcode("SO17 2LB");
+			
+			postcodes.add(postcode1);
+			postcodes.add(postcode2);
+			postcodes.add(postcode3);
+			postcodes.add(postcode4);
+			postcodes.add(postcode5);
+			
 			logger.info("Connecting to server...");
 			connectToServer();
 		}
@@ -43,24 +56,14 @@ public class Client implements ClientInterface {
 			System.out.println(e.getMessage());
 			System.exit(1);
 		}
-		
-		
 	}
 	
 	public void setRestaurantAndPostcodes(Restaurant restaurant) {
 		this.restaurant = restaurant;
 		
-		Postcode postcode1 = new Postcode("SO17 1TJ", restaurant);
-		Postcode postcode2 = new Postcode("SO17 1BX", restaurant);
-		Postcode postcode3 = new Postcode("SO17 2NJ", restaurant);
-		Postcode postcode4 = new Postcode("SO17 1TW", restaurant);
-		Postcode postcode5 = new Postcode("SO17 2LB", restaurant);
-		
-		postcodes.add(postcode1);
-		postcodes.add(postcode2);
-		postcodes.add(postcode3);
-		postcodes.add(postcode4);
-		postcodes.add(postcode5);
+		for (Postcode postcode: postcodes) {
+			postcode.calculateDistance(restaurant);
+		}
 	}
 	
 	public void connectToServer() throws Exception{
@@ -208,6 +211,7 @@ public class Client implements ClientInterface {
 		order.setStatus("Canceled");
 		sendMessage("CancelOrder", order);
 		registeredUser.getOrders().remove(order);
+		this.notifyUpdate();
 		
 	}
 
@@ -231,5 +235,18 @@ public class Client implements ClientInterface {
 	
 	public User getRegisteredUser() {
 		return registeredUser;
+	}
+
+	@Override
+	public void updated(UpdateEvent updateEvent) {
+		String modelName = updateEvent.model.getName();
+		String updateProperty = updateEvent.property;
+		Object oldValue = updateEvent.oldValue;
+		Object newValue = updateEvent.newValue;
+		
+		if (oldValue != newValue) {
+			System.out.println(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
+			logger.info(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
+		}
 	}
 }

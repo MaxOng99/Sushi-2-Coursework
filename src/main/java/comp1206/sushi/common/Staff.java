@@ -42,7 +42,7 @@ public class Staff extends Model implements UpdateListener, Runnable{
 	}
 
 	public void setStatus(String status) {
-		notifyUpdate("status",this.status,status);
+		notifyUpdate("Staff status",this.status,status);
 		this.status = status;
 	}
 	
@@ -55,7 +55,7 @@ public class Staff extends Model implements UpdateListener, Runnable{
 	public void run() {
 		
 		while(true) {
-			stockManager.queueRestockWay(this);
+			stockManager.makeDishes(this);
 		}
 	}
 }

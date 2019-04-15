@@ -27,6 +27,8 @@ public class Configuration {
 	private String restaurantName;
 	private DishStockManager dishStockManager;
 	private IngredientStockManager ingredientStockManager;
+	private Map<Dish, Number> configDishStock;
+	private Map<Ingredient, Number> configIngredientStock;
 	private List<User> users;
 	private List<Dish> dishes;
 	
@@ -37,6 +39,8 @@ public class Configuration {
 		this.dishes = new ArrayList<>();
 		this.dishStockManager = serverStockManager;
 		this.ingredientStockManager = serverIngredientManager;
+		this.configDishStock = new HashMap<>();
+		this.configIngredientStock = new HashMap<>();
 		removeServerData();
 		
 		try {
@@ -56,7 +60,6 @@ public class Configuration {
 		server.getUsers().clear();
 		server.getOrders().clear();
 		server.getPostcodes().clear();
-		this.dishStockManager.getDishStockLevels().clear();
 	}
 	
 	public void readLine() throws FileNotFoundException {
@@ -145,7 +148,7 @@ public class Configuration {
 						if (dish.getName().equals(splitted[1])) {
 							if (validateNumeric(splitted[2])) {
 								int dishStock = Integer.parseInt(splitted[2]);
-								this.dishStockManager.getDishStockLevels().put(dish, dishStock);
+								configDishStock.put(dish, dishStock);
 								break;
 							}
 						}
@@ -155,7 +158,7 @@ public class Configuration {
 						if (ingredient.getName().equals(splitted[1])) {
 							if (validateNumeric(splitted[2])) {
 								int ingredientStock = Integer.parseInt(splitted[2]);
-								this.ingredientStockManager.getIngredientStockLevel().put(ingredient, ingredientStock);
+								configIngredientStock.put(ingredient, ingredientStock);
 								break;
 							}
 						}
@@ -197,6 +200,9 @@ public class Configuration {
 					}
 				}
 			}
+			
+			ingredientStockManager.initializeStockFromConfig(configIngredientStock);
+			dishStockManager.initializeStockFromConfig(configDishStock);
 		}
 		catch(IOException e) {
 			System.err.print(e.getMessage());
@@ -212,13 +218,5 @@ public class Configuration {
 		}
 		*/
 		return true;
-	}
-	
-	public DishStockManager getDishStockManager() {
-		return dishStockManager;
-	}
-	
-	public IngredientStockManager getIngredientStockManager() {
-		return ingredientStockManager;
 	}
 }

@@ -36,7 +36,7 @@ public class Ingredient extends Model {
 	}
 
 	public void setUnit(String unit) {
-		this.notifyUpdate("Unit", this.unit, unit);
+		this.notifyUpdate("Ingredient Unit", this.unit, unit);
 		this.unit = unit;
 	}
 

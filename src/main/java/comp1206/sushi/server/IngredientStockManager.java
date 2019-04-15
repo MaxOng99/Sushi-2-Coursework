@@ -20,8 +20,16 @@ public class IngredientStockManager {
 		ingredientStock = new ConcurrentHashMap<>();
 	}
 	
+	public void initializeStockFromConfig(Map<Ingredient, Number> configStock) {
+		ingredientStock = configStock;
+	}
+	
 	public Map<Ingredient, Number> getIngredientStockLevel() {
 		return ingredientStock;
+	}
+	
+	public Number getIngredientStock(Ingredient ingredient) {
+		return ingredientStock.get(ingredient);
 	}
 	
 	public synchronized void setStock(Ingredient ingredient, Number quantity){	

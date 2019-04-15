@@ -39,7 +39,7 @@ public class Order extends Model implements Serializable {
 	}
 
 	public void setStatus(String status) {
-		notifyUpdate("status",this.status,status);
+		notifyUpdate("Order Status",this.status,status);
 		this.status = status;
 	}
 	

@@ -132,6 +132,5 @@ public class ClientMessageManager implements Runnable{
 		output.writeObject(orderToCancel);
 		output.flush();
 		output.reset();
-		System.out.println("Message sent!!");
 	}
 }
