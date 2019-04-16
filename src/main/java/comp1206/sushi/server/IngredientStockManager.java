@@ -28,8 +28,8 @@ public class IngredientStockManager {
 		return ingredientStock;
 	}
 	
-	public Number getIngredientStock(Ingredient ingredient) {
-		return ingredientStock.get(ingredient);
+	public int getIngredientStock(Ingredient ingredient) {
+		return (int) ingredientStock.get(ingredient);
 	}
 	
 	public synchronized void setStock(Ingredient ingredient, Number quantity){	

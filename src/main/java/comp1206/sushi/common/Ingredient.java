@@ -1,10 +1,13 @@
 package comp1206.sushi.common;
 
+import java.io.Serializable;
+
 import comp1206.sushi.common.Ingredient;
 import comp1206.sushi.common.Supplier;
 
-public class Ingredient extends Model {
+public class Ingredient extends Model implements Serializable{
 
+	private static final long serialVersionUID = -2146403233795769902L;
 	private String name;
 	private String unit;
 	private Supplier supplier;

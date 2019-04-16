@@ -32,6 +32,20 @@ public class DishStockManager {
 		return dishStock;
 	}
 	
+	public boolean checkAbleToRestock(Dish dish) {
+		Map<Ingredient, Number> recipe = dish.getRecipe();
+		boolean ableToRestock = false;
+		for (Entry<Ingredient, Number> current: recipe.entrySet()) {
+			if (!(ingredientManager.getIngredientStock(current.getKey()) > (Float) current.getValue())) {
+				System.out.println("Lacking " + current);
+			}
+			else {
+				ableToRestock = true;
+			}
+		}
+		return ableToRestock;
+	}
+	
 	public synchronized void setStock(Dish dish, Number quantity){	
 		int dishQuantity = (int) dishStock.get(dish);
 		int newDishQuantity = dishQuantity + (int) + (int) quantity;
@@ -39,7 +53,7 @@ public class DishStockManager {
 		
 		if (newDishQuantity < (int) dish.getRestockThreshold()) {
 			try {
-				if (dishRestockQueue.contains(dish)) {
+				if (dishRestockQueue.contains(dish) || checkAbleToRestock(dish) == false) {
 					System.out.println("no");
 				}
 				else {
@@ -49,21 +63,6 @@ public class DishStockManager {
 				e.printStackTrace();
 			}
 		}
-	}
-	
-	public boolean checkAbleToRestock(Dish dish) {
-		Map<Ingredient, Number> recipe = dish.getRecipe();
-		boolean ableToRestock = false;
-		for (Entry<Ingredient, Number> current: recipe.entrySet()) {
-			if (!((int) ingredientManager.getIngredientStock(current.getKey()) > (int) current.getValue())) {
-				System.out.println("Lacking " + current);
-				break;
-			}
-			else {
-				ableToRestock = true;
-			}
-		}
-		return ableToRestock;
 	}
 	
 	public void makeDishes(Staff staff) {

@@ -21,7 +21,7 @@ import comp1206.sushi.common.UpdateEvent;
 import comp1206.sushi.common.UpdateListener;
 import comp1206.sushi.common.User;
 
-public class Client implements ClientInterface, UpdateListener {
+public class Client implements ClientInterface {
 
     private static final Logger logger = LogManager.getLogger("Client");
     
@@ -235,18 +235,5 @@ public class Client implements ClientInterface, UpdateListener {
 	
 	public User getRegisteredUser() {
 		return registeredUser;
-	}
-
-	@Override
-	public void updated(UpdateEvent updateEvent) {
-		String modelName = updateEvent.model.getName();
-		String updateProperty = updateEvent.property;
-		Object oldValue = updateEvent.oldValue;
-		Object newValue = updateEvent.newValue;
-		
-		if (oldValue != newValue) {
-			System.out.println(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
-			logger.info(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
-		}
 	}
 }

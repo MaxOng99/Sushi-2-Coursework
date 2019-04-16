@@ -17,7 +17,7 @@ public class Basket implements Serializable{
 		basketMap = new HashMap<>();
 		displayBasketContents = "{ }";
 	}
-
+	
 	public String toString() {
 		return displayBasketContents;
 	}
@@ -44,6 +44,7 @@ public class Basket implements Serializable{
 		}
 		cost += ((Float) dish.getPrice() * (Integer) quantity);
 		basketMap.put(dish, quantity);
+		
 	}
 	
 	public void updateDishInBasket(Dish dish, Number quantity) {

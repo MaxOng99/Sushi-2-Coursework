@@ -129,7 +129,7 @@ public class Configuration {
 					Dish dishToAdd = server.addDish(splitted[1], splitted[2], price, restockThreshold, restockAmount);
 					dishes.add(dishToAdd);
 					for (String current: recipe) {
-						String[] ingredientQttyPair = current.split(" * ");
+						String[] ingredientQttyPair = current.split(" \\* ");
 						float quantity = Float.parseFloat(ingredientQttyPair[0]);
 						
 						for (Ingredient currentIngredient: server.getIngredients()) {
