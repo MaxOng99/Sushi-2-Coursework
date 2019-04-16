@@ -1,17 +1,16 @@
 package comp1206.sushi.server;
 
-import java.net.ServerSocket;
-
-import java.net.Socket;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Drone;
 import comp1206.sushi.common.Ingredient;
@@ -29,7 +28,7 @@ public class Server implements ServerInterface, UpdateListener{
    private static final Logger logger = LogManager.getLogger("Server");
 	
 	private Restaurant restaurant = null;
-	private ArrayList<ServerMessageManager> msgManagers = new ArrayList<>();
+	private ArrayList<ServerMailBox> mailBoxes = new ArrayList<>();
 	private ArrayList<Dish> dishes = new ArrayList<Dish>();
 	private ArrayList<Drone> drones = new ArrayList<Drone>();
 	private ArrayList<Ingredient> ingredients = new ArrayList<Ingredient>();
@@ -39,14 +38,14 @@ public class Server implements ServerInterface, UpdateListener{
 	private ArrayList<User> users = new ArrayList<User>();
 	private ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
-	
-	private IngredientStockManager ingredientManager = new IngredientStockManager();
-	private DishStockManager dishManager = new DishStockManager(ingredientManager);
+	private IngredientStockManager ingredientManager = new IngredientStockManager(this);
+	private DishStockManager dishManager = new DishStockManager(ingredientManager, this);
+	private BlockingQueue<Order> orderDeliveryQueue = new LinkedBlockingQueue<>();
 	
 	public Server() {
 		logger.info("Starting up server...");
 		loadConfiguration("C:\\Users\\BoBoRen\\Documents\\Test3.txt");
-		Thread listenForClientThread = new Thread(new ClientListener());
+		Thread listenForClientThread = new Thread(new ClientListener(this, logger));
 		listenForClientThread.start();
 	}
 	
@@ -54,31 +53,19 @@ public class Server implements ServerInterface, UpdateListener{
 		this.restaurant = restaurant;
 	}
 	
-	public class ClientListener implements Runnable{
-		
-		public void run() {
-			try {
-				listenForClients();
-			}
-			catch(Exception e) {
-				e.printStackTrace();
-			}
+	public void setDishesFromConfig(ArrayList<Dish> dishesFromConfig) {
+		this.dishes = dishesFromConfig;
+		for (Dish dish: dishes) {
+			dish.addUpdateListener(this);
 		}
-		
-		public void listenForClients() throws Exception{
-			ServerSocket serverSock = new ServerSocket(49920);
-			ExecutorService executors = Executors.newFixedThreadPool(10);
-			Socket socket = null;
-			while (true) {
-				ServerMessageManager newMsgManager = new ServerMessageManager(socket = serverSock.accept(), Server.this);
-				msgManagers.add(newMsgManager);
-				newMsgManager.notifyClient();
-				executors.execute((newMsgManager));
-				
-				if (socket!= null && socket.isConnected()) {
-					logger.info("Connection to client " + socket.getInetAddress());
-				}
-			}
+	}
+	
+	public void setDronesFromConfig(ArrayList<Drone> dronesFromConfig) {
+		this.drones = dronesFromConfig;
+		for (Drone drone: drones) {
+			drone.addUpdateListener(this);
+			drone.setIngredientStockManager(ingredientManager);
+			drone.setOrderQueue(orderDeliveryQueue);
 		}
 	}
 	
@@ -86,12 +73,28 @@ public class Server implements ServerInterface, UpdateListener{
 	public List<Dish> getDishes() {
 		return this.dishes;
 	}
-
+	
+	public void addMailBoxes(ServerMailBox mailBox) {
+		mailBoxes.add(mailBox);
+	}
+	
+	public void notifyClientsOfNewDishes(Dish dish) {
+		for (ServerMailBox current: mailBoxes) {
+			try {
+				dish.addUpdateListener(this);
+				current.sendNewDish(dish);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
 	@Override
 	public Dish addDish(String name, String description, Number price, Number restockThreshold, Number restockAmount) {
 		Dish newDish = new Dish(name,description,price,restockThreshold,restockAmount);
 		newDish.addUpdateListener(this);
 		this.dishes.add(newDish);
+		this.notifyClientsOfNewDishes(newDish);
 		this.notifyUpdate();
 		return newDish;
 	}
@@ -182,6 +185,8 @@ public class Server implements ServerInterface, UpdateListener{
 	public Drone addDrone(Number speed) {
 		Drone mock = new Drone(speed);
 		mock.addUpdateListener(this);
+		mock.setIngredientStockManager(ingredientManager);
+		mock.setOrderQueue(orderDeliveryQueue);
 		this.drones.add(mock);
 		return mock;
 	}
@@ -212,6 +217,12 @@ public class Server implements ServerInterface, UpdateListener{
 		order.setStatus("Incomplete");
 		order.addUpdateListener(this);
 		orders.add(order);
+		try {
+			orderDeliveryQueue.put(order);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		this.notifyUpdate();
 	}
 	@Override
 	public void removeStaff(Staff staff) {
@@ -315,15 +326,10 @@ public class Server implements ServerInterface, UpdateListener{
 		this.users.remove(user);
 		this.notifyUpdate();
 	}
-
+	
 	@Override
 	public void loadConfiguration(String filename) {
-		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);
-		
-		for (ServerMessageManager current: msgManagers) {
-			current.notifyClient();
-		}
-		
+		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);	
 		System.out.println("Loaded configuration: " + filename);
 	}
 

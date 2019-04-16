@@ -11,6 +11,7 @@ import java.util.Map;
 
 import comp1206.sushi.common.Basket;
 import comp1206.sushi.common.Dish;
+import comp1206.sushi.common.Drone;
 import comp1206.sushi.common.Ingredient;
 import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Postcode;
@@ -30,7 +31,8 @@ public class Configuration {
 	private Map<Dish, Number> configDishStock;
 	private Map<Ingredient, Number> configIngredientStock;
 	private List<User> users;
-	private List<Dish> dishes;
+	private ArrayList<Dish> dishes;
+	private ArrayList<Drone> drones;
 	
 	public Configuration(String filename, Server server, DishStockManager serverStockManager, IngredientStockManager serverIngredientManager) {
 		this.filename=filename;
@@ -41,6 +43,7 @@ public class Configuration {
 		this.ingredientStockManager = serverIngredientManager;
 		this.configDishStock = new HashMap<>();
 		this.configIngredientStock = new HashMap<>();
+		this.drones = new ArrayList<>();
 		removeServerData();
 		
 		try {
@@ -99,8 +102,8 @@ public class Configuration {
 				else if (line.contains("DRONE")) {
 					
 					if (validateNumeric(splitted[1]) == true) {
-						float dronSpeed = Float.parseFloat(splitted[1]);
-						server.addDrone(dronSpeed);
+						float droneSpeed = Float.parseFloat(splitted[1]);
+						drones.add(new Drone(droneSpeed));
 					}
 				}
 				
@@ -126,7 +129,7 @@ public class Configuration {
 					int restockAmount = Integer.parseInt(splitted[5]);
 					String[] recipe = splitted[6].split(",");
 					Map<Ingredient, Number> dishRecipe = new HashMap<>();
-					Dish dishToAdd = server.addDish(splitted[1], splitted[2], price, restockThreshold, restockAmount);
+					Dish dishToAdd = new Dish(splitted[1], splitted[2], price, restockThreshold, restockAmount);
 					dishes.add(dishToAdd);
 					for (String current: recipe) {
 						String[] ingredientQttyPair = current.split(" \\* ");
@@ -144,7 +147,7 @@ public class Configuration {
 				}
 				
 				else if (line.contains("STOCK")) {
-					for (Dish dish: server.getDishes()) {
+					for (Dish dish: dishes) {
 						if (dish.getName().equals(splitted[1])) {
 							if (validateNumeric(splitted[2])) {
 								int dishStock = Integer.parseInt(splitted[2]);
@@ -186,21 +189,21 @@ public class Configuration {
 							String[] orders = splitted[2].split(",");
 							for (String currentOrder: orders) {
 								String[] orderQuantityPair = currentOrder.split(" \\* ");
-								for (Dish currentDish: server.getDishes()) {
+								for (Dish currentDish: dishes) {
 									if (currentDish.getName().equals(orderQuantityPair[1])) {
 										int quantity = Integer.parseInt(orderQuantityPair[0]);
 										userBasket.addDishToBasket(currentDish, quantity);
 									}
 								}
 							}
-							
-							userBasket.setBasketContent();
 							server.addOrder(new Order(current));
 						}
 					}
 				}
 			}
 			
+			server.setDishesFromConfig(dishes);
+			server.setDronesFromConfig(drones);
 			ingredientStockManager.initializeStockFromConfig(configIngredientStock);
 			dishStockManager.initializeStockFromConfig(configDishStock);
 		}

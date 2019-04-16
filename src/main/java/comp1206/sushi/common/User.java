@@ -53,6 +53,10 @@ public class User extends Model implements Serializable{
 		this.postcode = postcode;
 	}
 	
+	public void updateBasket(Basket basket) {
+		
+	}
+	
 	public Basket getBasket() {
 		return basket;
 	}

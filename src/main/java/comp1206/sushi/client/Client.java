@@ -1,5 +1,6 @@
 package comp1206.sushi.client;
 
+import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,7 @@ public class Client implements ClientInterface {
 	public ArrayList<Dish> dishes;
 	public ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
-	private ClientMessageManager msgManager;
+	private ClientMailBox mailBox;
 	private User registeredUser;
 	
 	public Client() {
@@ -67,11 +68,11 @@ public class Client implements ClientInterface {
 	}
 	
 	public void connectToServer() throws Exception{
-		//logger.info("Connecting to server...");
+		logger.info("Connecting to server...");
 		Socket clientSock = new Socket("127.0.0.1", 49920);
 		System.out.println("Connected to server");
-		msgManager = new ClientMessageManager(clientSock, this);
-		Thread msgManagerThread = new Thread(msgManager);
+		mailBox = new ClientMailBox(this, clientSock);
+		Thread msgManagerThread = new Thread(mailBox);
 		msgManagerThread.start();
 	}
 		
@@ -103,7 +104,11 @@ public class Client implements ClientInterface {
 		
 		else {
 			registeredUser = new User(username, password, address, postcode);
-			sendMessage("Registration", registeredUser);
+			try {
+				mailBox.requestRegistration(registeredUser);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 			return registeredUser;
 		}
 	}
@@ -111,11 +116,15 @@ public class Client implements ClientInterface {
 	@Override
 	public User login(String username, String password) {
 		String credential = username + ":" + password;
-		sendMessage("Login", credential);
 		try {
-			Thread.sleep(1500);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+			mailBox.requestLogin(credential);
+			Thread.sleep(3000);
+		} 
+		catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		catch(InterruptedException e2) {
+			e2.printStackTrace();
 		}
 		return getRegisteredUser();
 	}
@@ -166,12 +175,15 @@ public class Client implements ClientInterface {
 	@Override
 	public Order checkoutBasket(User user) {
 		Basket userBasket = user.getBasket();
-		userBasket.setBasketContent();
 		Order newOrder = new Order(user);
 		newOrder.setStatus("Incomplete");
 		user.addNewOrder(newOrder);
-		sendMessage("Order", newOrder);
-		clearBasket(user);
+		try {
+			mailBox.notifyNewOrder(newOrder);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		//clearBasket(user);
 		return newOrder;
 	}
 
@@ -209,12 +221,20 @@ public class Client implements ClientInterface {
 	@Override
 	public void cancelOrder(Order order) {
 		order.setStatus("Canceled");
-		sendMessage("CancelOrder", order);
+		try {
+			mailBox.requestOderCancelation(order);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		registeredUser.getOrders().remove(order);
 		this.notifyUpdate();
 		
 	}
-
+	
+	public void addNewDish(Dish dish) {
+		dishes.add(dish);
+		this.notifyUpdate();
+	}
 	@Override
 	public void addUpdateListener(UpdateListener listener) {
 		this.listeners.add(listener);
@@ -224,11 +244,7 @@ public class Client implements ClientInterface {
 	public void notifyUpdate() {
 		this.listeners.forEach(listener -> listener.updated(new UpdateEvent()));
 	}
-	
-	public void sendMessage(String details, Object object) {
-		msgManager.notifyServer(details, object);
-	}
-	
+		
 	public void setRegisteredUser(User user) {
 		this.registeredUser = user;
 	}

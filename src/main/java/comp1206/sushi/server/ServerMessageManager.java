@@ -91,6 +91,7 @@ public class ServerMessageManager implements Runnable{
 			} catch (ClassNotFoundException | IOException e) {
 				try {
 					System.out.println("Lost connection to Client " + clientIP);
+					clientIP = null;
 					output.close();
 					input.close();
 					serverSocket.close();

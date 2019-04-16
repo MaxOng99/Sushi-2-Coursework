@@ -2,30 +2,37 @@ package comp1206.sushi.server;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import comp1206.sushi.common.Dish;
-import comp1206.sushi.common.Drone;
 import comp1206.sushi.common.Ingredient;
 import comp1206.sushi.common.Staff;
 
 
 public class DishStockManager {
-	
+
 	private IngredientStockManager ingredientManager;
 	private Random restockTime = new Random();
 	private Map<Dish, Number> dishStock;
-	private BlockingQueue<Dish> dishRestockQueue = new ArrayBlockingQueue<Dish>(10);
-	private BlockingQueue<Dish> dishDeliveryQueue = new ArrayBlockingQueue<Dish>(10);
+	private BlockingQueue<Dish> dishRestockQueue;
 	
-	public DishStockManager(IngredientStockManager serverIngredientManager) {
+	public DishStockManager(IngredientStockManager serverIngredientManager, Server server) {
 		ingredientManager = serverIngredientManager;
+		dishRestockQueue = new LinkedBlockingQueue<>();
 	}
 	
 	public void initializeStockFromConfig(Map<Dish, Number> configStock) {
 		dishStock = configStock;
+		for (Entry<Dish, Number> currentDishStockPair: dishStock.entrySet()) {
+			if ((int)currentDishStockPair.getValue() < (int)currentDishStockPair.getKey().getRestockThreshold()) {
+				try {
+					dishRestockQueue.put(currentDishStockPair.getKey());
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}
 	}
 	
 	public Map<Dish, Number> getDishStockLevels() {
@@ -48,9 +55,8 @@ public class DishStockManager {
 	
 	public synchronized void setStock(Dish dish, Number quantity){	
 		int dishQuantity = (int) dishStock.get(dish);
-		int newDishQuantity = dishQuantity + (int) + (int) quantity;
+		int newDishQuantity = dishQuantity + (int) quantity;
 		dishStock.replace(dish, newDishQuantity);
-		
 		if (newDishQuantity < (int) dish.getRestockThreshold()) {
 			try {
 				if (dishRestockQueue.contains(dish) || checkAbleToRestock(dish) == false) {
@@ -84,9 +90,5 @@ public class DishStockManager {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	}
-	
-	public void deliverDish(Drone drone) {
-		
 	}
 }

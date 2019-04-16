@@ -8,34 +8,17 @@ import java.util.Map.Entry;
 public class Basket implements Serializable{
 	
 	private static final long serialVersionUID = -1803572769884618746L;
-	private int cost;
+	private float cost;
 	private Map<Dish, Number> basketMap;
-	private String displayBasketContents;
 	
 	public Basket() {
 		cost = 0;
 		basketMap = new HashMap<>();
-		displayBasketContents = "{ }";
 	}
+	
 	
 	public String toString() {
-		return displayBasketContents;
-	}
-	
-	public void setBasketContent() {	
-		
-		displayBasketContents = "";
-		if (basketMap.size() > 1) {
-			for (Entry<Dish, Number> current: basketMap.entrySet()) {
-				displayBasketContents += "{ " + current.getKey() + "=" + current.getValue() + " },";
-			}
-		}
-		else {
-			for (Entry<Dish, Number> current: basketMap.entrySet()) {
-				displayBasketContents = "{ " + current.getKey() + "=" + current.getValue() + " }";
-			}	
-		}
-		
+		return basketMap.toString();
 	}
 	
 	public void addDishToBasket(Dish dish, Number quantity) {
@@ -48,13 +31,13 @@ public class Basket implements Serializable{
 	}
 	
 	public void updateDishInBasket(Dish dish, Number quantity) {
-		int cost = 0;
+		float cost = 0;
 		setCost(cost);
 		
 		if ( (Integer) quantity == 0) {
 			basketMap.remove(dish);
 			for(Entry<Dish, Number> item: basketMap.entrySet()) {
-				cost += (Integer) item.getKey().getPrice() * (Integer) item.getValue();
+				cost += (Float) item.getKey().getPrice() * (Integer) item.getValue();
 			}			
 		} 
 		else {
@@ -66,7 +49,7 @@ public class Basket implements Serializable{
 		setCost(cost);
 	}
 	
-	public void setCost(int newCost) {
+	public void setCost(float newCost) {
 		cost = newCost;
 	}
 	public Number getCost() {
