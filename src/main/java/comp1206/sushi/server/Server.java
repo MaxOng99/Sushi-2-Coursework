@@ -49,8 +49,14 @@ public class Server implements ServerInterface, UpdateListener{
 		listenForClientThread.start();
 	}
 	
-	public void setRestaurant(Restaurant restaurant) {
-		this.restaurant = restaurant;
+	@Override
+	public void loadConfiguration(String filename) {
+		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);	
+		System.out.println("Loaded configuration: " + filename);
+	}
+
+	public void setRestaurantFromConfig(Restaurant restaurantFromConfig) {
+		this.restaurant = restaurantFromConfig;
 	}
 	
 	public void setDishesFromConfig(ArrayList<Dish> dishesFromConfig) {
@@ -60,12 +66,19 @@ public class Server implements ServerInterface, UpdateListener{
 		}
 	}
 	
+	public void setStaffsFromConfig(ArrayList<Staff> staffsFromConfig) {
+		this.staff = staffsFromConfig;
+		for (Staff currentStaff: staff) {
+			currentStaff.setDishStckManager(dishManager);
+		}
+	}
 	public void setDronesFromConfig(ArrayList<Drone> dronesFromConfig) {
 		this.drones = dronesFromConfig;
 		for (Drone drone: drones) {
 			drone.addUpdateListener(this);
 			drone.setIngredientStockManager(ingredientManager);
 			drone.setOrderQueue(orderDeliveryQueue);
+			drone.setRestaurantPostcode(getRestaurantPostcode());
 		}
 	}
 	
@@ -187,6 +200,7 @@ public class Server implements ServerInterface, UpdateListener{
 		mock.addUpdateListener(this);
 		mock.setIngredientStockManager(ingredientManager);
 		mock.setOrderQueue(orderDeliveryQueue);
+		mock.setRestaurantPostcode(getRestaurantPostcode());
 		this.drones.add(mock);
 		return mock;
 	}
@@ -327,12 +341,7 @@ public class Server implements ServerInterface, UpdateListener{
 		this.notifyUpdate();
 	}
 	
-	@Override
-	public void loadConfiguration(String filename) {
-		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);	
-		System.out.println("Loaded configuration: " + filename);
-	}
-
+	
 	@Override
 	public void setRecipe(Dish dish, Map<Ingredient, Number> recipe) {
 		for(Entry<Ingredient, Number> recipeItem : recipe.entrySet()) {
@@ -443,7 +452,7 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	@Override
 	public void updated(UpdateEvent updateEvent) {
-		
+		this.notifyUpdate();
 		String modelName = updateEvent.model.getName();
 		String updateProperty = updateEvent.property;
 		Object oldValue = updateEvent.oldValue;

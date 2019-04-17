@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import comp1206.sushi.common.Basket;
 import comp1206.sushi.common.Dish;
@@ -41,8 +42,8 @@ public class Configuration {
 		this.dishes = new ArrayList<>();
 		this.dishStockManager = serverStockManager;
 		this.ingredientStockManager = serverIngredientManager;
-		this.configDishStock = new HashMap<>();
-		this.configIngredientStock = new HashMap<>();
+		this.configDishStock = new ConcurrentHashMap<>();
+		this.configIngredientStock = new ConcurrentHashMap<>();
 		this.drones = new ArrayList<>();
 		removeServerData();
 		
@@ -82,7 +83,7 @@ public class Configuration {
 					server.addPostcode(splitted[2]);
 					restaurantPostcode = new Postcode(splitted[2]);
 					Restaurant restaurant = new Restaurant(restaurantName, restaurantPostcode);
-					server.setRestaurant(restaurant);
+					server.setRestaurantFromConfig(restaurant);
 				}
 				
 				else if (line.contains("SUPPLIER")) {
@@ -202,10 +203,11 @@ public class Configuration {
 				}
 			}
 			
-			server.setDishesFromConfig(dishes);
-			server.setDronesFromConfig(drones);
 			ingredientStockManager.initializeStockFromConfig(configIngredientStock);
 			dishStockManager.initializeStockFromConfig(configDishStock);
+			server.setDishesFromConfig(dishes);
+			server.setDronesFromConfig(drones);
+			
 		}
 		catch(IOException e) {
 			System.err.print(e.getMessage());

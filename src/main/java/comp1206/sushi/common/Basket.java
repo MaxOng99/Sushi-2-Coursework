@@ -23,7 +23,7 @@ public class Basket implements Serializable{
 	
 	public void addDishToBasket(Dish dish, Number quantity) {
 		if (basketMap.containsKey(dish)) {
-			cost -= (Integer) dish.getPrice() * (Integer) basketMap.get(dish);
+			cost -= (Float) dish.getPrice() * (Integer) basketMap.get(dish);
 		}
 		cost += ((Float) dish.getPrice() * (Integer) quantity);
 		basketMap.put(dish, quantity);

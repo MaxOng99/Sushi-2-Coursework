@@ -1,13 +1,18 @@
 package comp1206.sushi.common;
+import java.util.Random;
+import java.util.concurrent.BlockingQueue;
+
 import comp1206.sushi.server.DishStockManager;
 
-public class Staff extends Model implements UpdateListener, Runnable{
+public class Staff extends Model implements Runnable{
 
 	private String name;
 	private DishStockManager stockManager;
 	private String status;
 	private Number fatigue;
 	private Thread kitchenStaff;
+	private BlockingQueue<Dish> dishRestockQueue;
+	private Random restockTime = new Random();
 	
 	public Staff(String name) {
 		this.setName(name);
@@ -22,7 +27,9 @@ public class Staff extends Model implements UpdateListener, Runnable{
 
 	public void setDishStckManager(DishStockManager serverStockManager) {
 		stockManager = serverStockManager;
+		dishRestockQueue = stockManager.getDishRestockQueue();
 	}
+	
 	public void setName(String name) {
 		this.notifyUpdate("Name", this.name, name);
 		this.name = name;
@@ -46,21 +53,32 @@ public class Staff extends Model implements UpdateListener, Runnable{
 		this.status = status;
 	}
 	
-	@Override
-	public void updated(UpdateEvent updateEvent) {
-		
-	}
-	
-	@Override
-	public void run() {
+	public void makeDishes() {
 		try {
-			Thread.sleep(5000);
+			Dish dishTaken = dishRestockQueue.take();
+			int currentStockValue = stockManager.getDishStock(dishTaken);
+			int restockThreshold = (int) dishTaken.getRestockThreshold();
+			int restockAmount = (int) dishTaken.getRestockAmount();
+			
+			while(currentStockValue < restockThreshold) {
+				this.setStatus("Restocking " + dishTaken + "...");
+				Thread.sleep(restockTime.nextInt(40001) + 30000);
+				stockManager.getDishStockLevels().replace(dishTaken, restockAmount + currentStockValue);
+				currentStockValue += restockAmount;
+			}
+			dishTaken.setRestockStatus(false);
+			this.setStatus("Idle");
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+	
+	@Override
+	public void run() {
+	
 		while(true) {
-			stockManager.makeDishes(this);
+			makeDishes();
 		}
 	}
 }

@@ -11,12 +11,11 @@ public class Postcode extends Model implements Serializable{
 	private static final long serialVersionUID = -2179416792423154920L;
 	private String name;
 	private Map<String,Double> latLong;
-	private Number distance;
+	private double distance;
 
 	public Postcode(String code) {
 		this.name = code;
 		calculateLatLong();
-		this.distance = Integer.valueOf(0);
 	}
 	
 	public Postcode(String code, Restaurant restaurant) {

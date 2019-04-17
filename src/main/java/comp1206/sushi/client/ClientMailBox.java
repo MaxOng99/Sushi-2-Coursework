@@ -14,12 +14,16 @@ public class ClientMailBox implements Runnable{
 	
 	private Client client;
 	private Comms clientSideComm;
+	private User registeredUser;
 	
 	public ClientMailBox(Client client, Socket socket) {
 		this.client = client;
 		this.clientSideComm = new Comms(socket);
 	}
 	
+	public void setRegisteredUser(User registeredUser) {
+		this.registeredUser = registeredUser;
+	}
 	public void requestRegistration(User newUser) throws IOException{
 		clientSideComm.sendMessage(newUser);
 	}
@@ -78,6 +82,17 @@ public class ClientMailBox implements Runnable{
 					if (input.equals("Verification Failed")) {
 						client.setRegisteredUser(null);
 					}
+				}
+				
+				else if (objectReceived instanceof Order) {
+					Order order = (Order) objectReceived;
+					
+					for (Order userOrder: registeredUser.getOrders()) {
+						if (order.getName().equals(userOrder.getName())) {
+							userOrder.setStatus("Complete");
+						}
+					}
+					
 				}
 			}
 		}

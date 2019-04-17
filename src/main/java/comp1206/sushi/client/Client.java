@@ -27,6 +27,7 @@ public class Client implements ClientInterface {
     private static final Logger logger = LogManager.getLogger("Client");
     
     public Restaurant restaurant;
+    public ArrayList<Order> orders;
 	public ArrayList<Dish> dishes;
 	public ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
@@ -106,6 +107,7 @@ public class Client implements ClientInterface {
 			registeredUser = new User(username, password, address, postcode);
 			try {
 				mailBox.requestRegistration(registeredUser);
+				mailBox.setRegisteredUser(registeredUser);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}

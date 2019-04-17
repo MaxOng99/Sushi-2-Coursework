@@ -11,6 +11,7 @@ public class Dish extends Model implements Serializable{
 	
 	private static final long serialVersionUID = -6068065353671249828L;
 	
+	private boolean restockStatus;
 	private String name;
 	private String description;
 	private Number price;
@@ -25,8 +26,16 @@ public class Dish extends Model implements Serializable{
 		this.restockThreshold = restockThreshold;
 		this.restockAmount = restockAmount;
 		this.recipe = new HashMap<Ingredient,Number>();
+		this.setRestockStatus(false);;
 	}
-
+	
+	public void setRestockStatus(boolean status) {
+		restockStatus = status;
+	}
+	
+	public boolean getRestockStatus() {
+		return restockStatus;
+	}
 	public String getName() {
 		return name;
 	}

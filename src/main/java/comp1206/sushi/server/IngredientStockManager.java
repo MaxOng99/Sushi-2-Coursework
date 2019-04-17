@@ -44,7 +44,15 @@ public class IngredientStockManager {
 		return (int) ingredientStock.get(ingredient);
 	}
 	
-	public synchronized void setStock(Ingredient ingredient, Number quantity){	
+	public BlockingQueue<Ingredient> getIngredientRestockQueue() {
+		return ingredientRestockQueue;
+	}
+	
+	public void directRestock(Ingredient ingredient, Number quantitiy) {
+		ingredientStock.replace(ingredient, quantitiy);
+	}
+	
+	public void setStock(Ingredient ingredient, Number quantity){	
 		int ingredientQuantity = (int) ingredientStock.get(ingredient);
 		int newIngredientQuantity = (int) (ingredientQuantity + (Float) quantity);
 		ingredientStock.replace(ingredient, newIngredientQuantity);
@@ -61,34 +69,6 @@ public class IngredientStockManager {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-		}
-	}
-	
-	public BlockingQueue<Ingredient> getIngredientRestockQueue() {
-		return ingredientRestockQueue;
-	}
-	
-	public void restockIngredient(Drone drone) {
-		try {
-			Ingredient ingredientTaken = ingredientRestockQueue.take();
-			int currentStockValue = (int)ingredientStock.get(ingredientTaken);
-			int restockThreshold = (int) ingredientTaken.getRestockThreshold();
-			int restockAmount = (int) ingredientTaken.getRestockAmount();
-			drone.setSource(server.getRestaurantPostcode());
-			drone.setDestination(ingredientTaken.getSupplier().getPostcode());
-			
-			while(currentStockValue < restockThreshold) {
-				drone.setStatus("Restocking " + ingredientTaken + "...");
-				Thread.sleep(8000);
-				ingredientStock.replace(ingredientTaken, restockAmount + currentStockValue);
-				currentStockValue += restockAmount;
-			}
-			
-			drone.setSource(null);
-			drone.setStatus("Idle");
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 	}
 }

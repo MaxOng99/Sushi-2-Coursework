@@ -1,6 +1,7 @@
 package comp1206.sushi.server;
 
 import java.io.IOException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
@@ -20,11 +21,13 @@ public class ServerMailBox implements Runnable{
 	private Server server;
 	private Comms serverSideComm;
 	private InetAddress clientIP;
+	private List<Order> orders;
 	
 	public ServerMailBox(Server server, Socket socket, InetAddress clientIP) {
 		this.server = server;
 		serverSideComm = new Comms(socket, clientIP);
 		this.clientIP = clientIP;
+		this.orders = new CopyOnWriteArrayList<>();
 	}
 	
 	public void sendInitialDataToClient() throws IOException{
@@ -49,6 +52,7 @@ public class ServerMailBox implements Runnable{
 		for (User user: server.getUsers()) {
 			if (user.getName().equals(userOfNewOrder.getName()) && user.getPassword().equals(userOfNewOrder.getPassword())) {
 				server.addOrder(order);
+				this.orders.add(order);
 				Basket basket = order.getBasket();
 				user.updateBasket(basket);
 				break;
@@ -66,6 +70,7 @@ public class ServerMailBox implements Runnable{
 					for(Entry<Ingredient, Number> currentEntry: recipe.entrySet()) {
 						server.setStock(currentEntry.getKey(), -(Float)currentEntry.getValue());
 					}
+					break;
 				}
 			}
 		}
@@ -93,11 +98,51 @@ public class ServerMailBox implements Runnable{
 			}
 		}
 	}
-
+	
+	class InformCompleteOrder implements Runnable {
+		@Override
+		public void run() {
+			
+			while(true) {
+				if (!ServerMailBox.this.orders.isEmpty()) {
+					for (Order order: ServerMailBox.this.orders) {
+						if (server.isOrderComplete(order)) {
+							try {
+								serverSideComm.sendMessage(order);
+								System.out.println("Success!!!");
+								ServerMailBox.this.orders.remove(order);
+								try {
+									Thread.sleep(5000);
+								} catch (InterruptedException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							} catch (IOException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+						}
+						else {
+							System.out.println("Meiyou work?");
+							try {
+								Thread.sleep(3000);
+							} catch (InterruptedException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						}
+					}
+				}
+			}	
+		}
+		
+	}
 	
 	@Override
 	public void run() {
 		try {
+			Thread informOrderThread = new Thread(new InformCompleteOrder());
+			informOrderThread.start();
 			sendInitialDataToClient();
 		}
 		catch(IOException e) {
@@ -105,7 +150,6 @@ public class ServerMailBox implements Runnable{
 		}
 		
 		while (true) {
-			
 			if (serverSideComm.getClientIP() != null) {
 				Object objectReceived = serverSideComm.receiveMessage(this);
 				if (objectReceived instanceof User) {
