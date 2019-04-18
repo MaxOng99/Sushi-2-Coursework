@@ -1,11 +1,15 @@
 package comp1206.sushi.common;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 
 import comp1206.sushi.server.DishStockManager;
+import comp1206.sushi.server.Server;
 
 public class Staff extends Model implements Runnable{
-
+	
+	private Server server;
 	private String name;
 	private DishStockManager stockManager;
 	private String status;
@@ -14,7 +18,8 @@ public class Staff extends Model implements Runnable{
 	private BlockingQueue<Dish> dishRestockQueue;
 	private Random restockTime = new Random();
 	
-	public Staff(String name) {
+	public Staff(String name, Server server) {
+		this.server = server;
 		this.setName(name);
 		this.setFatigue(0);
 		kitchenStaff = new Thread(this);
@@ -56,6 +61,7 @@ public class Staff extends Model implements Runnable{
 	public void makeDishes() {
 		try {
 			Dish dishTaken = dishRestockQueue.take();
+			Map<Ingredient, Number> recipe = dishTaken.getRecipe();
 			int currentStockValue = stockManager.getDishStock(dishTaken);
 			int restockThreshold = (int) dishTaken.getRestockThreshold();
 			int restockAmount = (int) dishTaken.getRestockAmount();
@@ -63,10 +69,16 @@ public class Staff extends Model implements Runnable{
 			while(currentStockValue < restockThreshold) {
 				this.setStatus("Restocking " + dishTaken + "...");
 				Thread.sleep(restockTime.nextInt(40001) + 30000);
+				for (Entry<Ingredient, Number> currentPair: recipe.entrySet()) {
+					server.setStock(currentPair.getKey(), - (int) currentPair.getValue());
+				}
 				stockManager.getDishStockLevels().replace(dishTaken, restockAmount + currentStockValue);
 				currentStockValue += restockAmount;
 			}
+			dishTaken.setAvailability(true);
 			dishTaken.setRestockStatus(false);
+			server.informClientsOfDishUpdates(dishTaken);
+			
 			this.setStatus("Idle");
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block

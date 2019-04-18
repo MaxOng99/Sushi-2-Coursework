@@ -116,8 +116,8 @@ public class Configuration {
 								int restockThreshold = Integer.parseInt(splitted[4]);
 								int restockAmount = Integer.parseInt(splitted[5]);
 								int weight = Integer.parseInt(splitted[6]);
-								
-								server.addIngredient(splitted[1], splitted[2], supplier, restockThreshold, restockAmount, weight);
+								Ingredient ingredient = server.addIngredient(splitted[1], splitted[2], supplier, restockThreshold, restockAmount, weight);
+								configIngredientStock.put(ingredient, 0);
 								break;
 							}
 						}
@@ -132,6 +132,7 @@ public class Configuration {
 					Map<Ingredient, Number> dishRecipe = new HashMap<>();
 					Dish dishToAdd = new Dish(splitted[1], splitted[2], price, restockThreshold, restockAmount);
 					dishes.add(dishToAdd);
+					configDishStock.put(dishToAdd, 0);
 					for (String current: recipe) {
 						String[] ingredientQttyPair = current.split(" \\* ");
 						float quantity = Float.parseFloat(ingredientQttyPair[0]);
@@ -144,7 +145,7 @@ public class Configuration {
 						}
 					}
 					
-					server.setRecipe(dishToAdd, dishRecipe);
+					dishToAdd.setRecipe(dishRecipe);
 				}
 				
 				else if (line.contains("STOCK")) {

@@ -35,7 +35,6 @@ public class ClientListener implements Runnable{
 				ServerMailBox newMailBox = new ServerMailBox(server, socket = serverSock.accept(), socket.getInetAddress());
 				server.addMailBoxes(newMailBox);
 				clientIP = socket.getInetAddress();
-				newMailBox.sendInitialDataToClient();
 				executors.execute((newMailBox));
 				
 				if (socket!= null && socket.isConnected()) {

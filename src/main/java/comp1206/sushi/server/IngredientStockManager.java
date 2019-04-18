@@ -13,6 +13,7 @@ import comp1206.sushi.common.Ingredient;
 public class IngredientStockManager {
 	
 	private Server server;
+	
 	private Random restockTime = new Random();
 	private Map<Ingredient, Number> ingredientStock;
 	private BlockingQueue<Ingredient> ingredientRestockQueue;
@@ -22,6 +23,8 @@ public class IngredientStockManager {
 		ingredientStock = new ConcurrentHashMap<>();
 		ingredientRestockQueue = new LinkedBlockingQueue<>();
 	}
+	
+
 	
 	public void initializeStockFromConfig(Map<Ingredient, Number> configStock) {
 		ingredientStock = configStock;
@@ -54,7 +57,7 @@ public class IngredientStockManager {
 	
 	public void setStock(Ingredient ingredient, Number quantity){	
 		int ingredientQuantity = (int) ingredientStock.get(ingredient);
-		int newIngredientQuantity = (int) (ingredientQuantity + (Float) quantity);
+		int newIngredientQuantity = (int) (ingredientQuantity + (int) quantity);
 		ingredientStock.replace(ingredient, newIngredientQuantity);
 		
 		if (newIngredientQuantity < (int) ingredient.getRestockThreshold()) {

@@ -42,9 +42,11 @@ public class Server implements ServerInterface, UpdateListener{
 	private DishStockManager dishManager = new DishStockManager(ingredientManager, this);
 	private BlockingQueue<Order> orderDeliveryQueue = new LinkedBlockingQueue<>();
 	
+	
+	
 	public Server() {
 		logger.info("Starting up server...");
-		loadConfiguration("C:\\Users\\BoBoRen\\Documents\\Test3.txt");
+		restaurant = new Restaurant("Southampton Sushi", new Postcode("SO17 1BJ"));
 		Thread listenForClientThread = new Thread(new ClientListener(this, logger));
 		listenForClientThread.start();
 	}
@@ -53,6 +55,14 @@ public class Server implements ServerInterface, UpdateListener{
 	public void loadConfiguration(String filename) {
 		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);	
 		System.out.println("Loaded configuration: " + filename);
+		
+		for (ServerMailBox mailBox: mailBoxes) {
+			try {
+				mailBox.sendInitialDataToClient();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 	public void setRestaurantFromConfig(Restaurant restaurantFromConfig) {
@@ -91,10 +101,9 @@ public class Server implements ServerInterface, UpdateListener{
 		mailBoxes.add(mailBox);
 	}
 	
-	public void notifyClientsOfNewDishes(Dish dish) {
+	public void informClientsOfDishUpdates(Dish dish) {
 		for (ServerMailBox current: mailBoxes) {
 			try {
-				dish.addUpdateListener(this);
 				current.sendNewDish(dish);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -106,8 +115,8 @@ public class Server implements ServerInterface, UpdateListener{
 	public Dish addDish(String name, String description, Number price, Number restockThreshold, Number restockAmount) {
 		Dish newDish = new Dish(name,description,price,restockThreshold,restockAmount);
 		newDish.addUpdateListener(this);
+		newDish.setRestockStatus(false);
 		this.dishes.add(newDish);
-		this.notifyClientsOfNewDishes(newDish);
 		this.notifyUpdate();
 		return newDish;
 	}
@@ -115,6 +124,8 @@ public class Server implements ServerInterface, UpdateListener{
 	@Override
 	public void removeDish(Dish dish) {
 		this.dishes.remove(dish);
+		dish.setAvailability(false);
+		this.informClientsOfDishUpdates(dish);
 		this.notifyUpdate();
 	}
 
@@ -219,7 +230,7 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public Staff addStaff(String name) {
-		Staff mock = new Staff(name);
+		Staff mock = new Staff(name, this);
 		mock.setStatus("Idle");
 		mock.setDishStckManager(dishManager);
 		mock.addUpdateListener(this);
@@ -380,6 +391,8 @@ public class Server implements ServerInterface, UpdateListener{
 	public void setRestockLevels(Dish dish, Number restockThreshold, Number restockAmount) {
 		dish.setRestockThreshold(restockThreshold);
 		dish.setRestockAmount(restockAmount);
+		dishManager.addDishToStockManager(dish, 0);
+		this.setStock(dish, 0);
 		this.notifyUpdate();
 	}
 

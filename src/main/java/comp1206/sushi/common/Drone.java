@@ -30,7 +30,7 @@ public class Drone extends Model implements Runnable{
 		this.setCapacity(1);
 		this.setBattery(100);
 		this.setStatus("Idle");
-		this.setProgress(0);
+		this.setProgress(null);
 		this.droneThread = new Thread(this);
 		this.distanceTravelled = 0;
 	}
@@ -132,7 +132,7 @@ public class Drone extends Model implements Runnable{
 				}
 				
 				else {
-					
+					ingredientTaken.setIngredientAvailability(false);
 					int currentStockValue = (int)ingredientManager.getIngredientStock(ingredientTaken);
 					int restockThreshold = (int) ingredientTaken.getRestockThreshold();
 					int restockAmount = (int) ingredientTaken.getRestockAmount();
@@ -149,6 +149,7 @@ public class Drone extends Model implements Runnable{
 				        ingredientManager.directRestock(ingredientTaken, currentStockValue + restockAmount);
 				        currentStockValue += restockAmount;
 					}
+					ingredientTaken.setIngredientAvailability(true);
 				}
 				
 			} catch (InterruptedException e) {

@@ -3,6 +3,7 @@ package comp1206.sushi.client;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.ListIterator;
 
 import comp1206.sushi.common.Comms;
 import comp1206.sushi.common.Dish;
@@ -64,17 +65,13 @@ public class ClientMailBox implements Runnable{
 				}
 				
 				if (objectReceived instanceof ArrayList<?>) {
-					setDishesInClient((ArrayList<Dish>) objectReceived);
+					ArrayList<Dish> serverDishes = (ArrayList<Dish>) objectReceived;
+					setDishesInClient((ArrayList<Dish>) objectReceived);	
 				}
 				
 				else if (objectReceived instanceof Restaurant) {
 					Restaurant serverRestaurant = (Restaurant) objectReceived;
 					setRestaurantInClient(serverRestaurant);
-				}
-				
-				else if (objectReceived instanceof Dish) {
-					Dish newDish = (Dish) objectReceived;
-					client.addNewDish(newDish);
 				}
 				
 				else if(objectReceived instanceof String) {
@@ -92,7 +89,24 @@ public class ClientMailBox implements Runnable{
 							userOrder.setStatus("Complete");
 						}
 					}
+				}
+				
+				else if (objectReceived instanceof Dish) {
+					Dish dishReceived = (Dish) objectReceived;
+					if (dishReceived.getAvailability() == true) {
+						client.addNewDish(dishReceived);
+					}
 					
+					else {
+						ListIterator<Dish> dishIt = client.getDishes().listIterator();
+						while(dishIt.hasNext()) {
+							Dish dish = dishIt.next();
+							if (dish.getName().equals(dishReceived.getName())){
+								dishIt.remove();
+								client.notifyUpdate();
+							}
+						}
+					}
 				}
 			}
 		}

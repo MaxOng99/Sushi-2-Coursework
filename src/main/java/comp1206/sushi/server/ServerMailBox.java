@@ -1,12 +1,13 @@
 package comp1206.sushi.server;
 
 import java.io.IOException;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import comp1206.sushi.common.Basket;
 import comp1206.sushi.common.Comms;
@@ -22,8 +23,10 @@ public class ServerMailBox implements Runnable{
 	private Comms serverSideComm;
 	private InetAddress clientIP;
 	private List<Order> orders;
+	private boolean reloadedConfiguration;
 	
 	public ServerMailBox(Server server, Socket socket, InetAddress clientIP) {
+		this.reloadedConfiguration = false;
 		this.server = server;
 		serverSideComm = new Comms(socket, clientIP);
 		this.clientIP = clientIP;
@@ -31,11 +34,23 @@ public class ServerMailBox implements Runnable{
 	}
 	
 	public void sendInitialDataToClient() throws IOException{
-		List<Dish> serverDishes = server.getDishes();
-		serverSideComm.sendMessage(serverDishes);
 		
-		Restaurant serverRestaurant = server.getRestaurant();
-		serverSideComm.sendMessage(serverRestaurant);
+		if (clientIP != null) {
+
+			List<Dish> dishesToSent = new ArrayList<>();
+			for (Dish dish: server.getDishes()) {
+				if (dish.getAvailability() == true) {
+					dishesToSent.add(dish);
+				}
+			}
+			Restaurant serverRestaurant = server.getRestaurant();
+			serverSideComm.sendMessage(dishesToSent);
+			serverSideComm.sendMessage(serverRestaurant);
+		}
+		else {
+			return;
+		}
+		
 	}
 	
 	public void sendNewDish(Dish dish) throws IOException {
@@ -109,26 +124,10 @@ public class ServerMailBox implements Runnable{
 						if (server.isOrderComplete(order)) {
 							try {
 								serverSideComm.sendMessage(order);
-								System.out.println("Success!!!");
 								ServerMailBox.this.orders.remove(order);
-								try {
-									Thread.sleep(5000);
-								} catch (InterruptedException e) {
-									// TODO Auto-generated catch block
-									e.printStackTrace();
-								}
 							} catch (IOException e1) {
 								// TODO Auto-generated catch block
 								e1.printStackTrace();
-							}
-						}
-						else {
-							System.out.println("Meiyou work?");
-							try {
-								Thread.sleep(3000);
-							} catch (InterruptedException e) {
-								// TODO Auto-generated catch block
-								e.printStackTrace();
 							}
 						}
 					}

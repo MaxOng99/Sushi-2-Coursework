@@ -5,6 +5,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -28,7 +29,7 @@ public class Client implements ClientInterface {
     
     public Restaurant restaurant;
     public ArrayList<Order> orders;
-	public ArrayList<Dish> dishes;
+	public List<Dish> dishes = new ArrayList<Dish>();
 	public ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
 	private ClientMailBox mailBox;
@@ -37,7 +38,6 @@ public class Client implements ClientInterface {
 	public Client() {
 		try {
 			logger.info("Starting up client...");
-			
 			Postcode postcode1 = new Postcode("SO17 1TJ");
 			Postcode postcode2 = new Postcode("SO17 1BX");
 			Postcode postcode3 = new Postcode("SO17 2NJ");
@@ -138,6 +138,7 @@ public class Client implements ClientInterface {
 	
 	public void setDishes(ArrayList<Dish> serverDishes) {
 		dishes = serverDishes;
+		this.notifyUpdate();
 	}
 	@Override
 	public List<Dish> getDishes() {
@@ -235,6 +236,11 @@ public class Client implements ClientInterface {
 	
 	public void addNewDish(Dish dish) {
 		dishes.add(dish);
+		this.notifyUpdate();
+	}
+	
+	public void removeDish(Dish dish) {
+		dishes.remove(dish);
 		this.notifyUpdate();
 	}
 	@Override

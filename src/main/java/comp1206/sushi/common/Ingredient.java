@@ -8,6 +8,7 @@ import comp1206.sushi.common.Supplier;
 public class Ingredient extends Model implements Serializable{
 
 	private static final long serialVersionUID = -2146403233795769902L;
+	private volatile boolean availability;
 	private String name;
 	private String unit;
 	private Supplier supplier;
@@ -23,6 +24,7 @@ public class Ingredient extends Model implements Serializable{
 		this.setRestockThreshold(restockThreshold);
 		this.setRestockAmount(restockAmount);
 		this.setWeight(weight);
+		this.setIngredientAvailability(true);
 	}
 
 	public String getName() {
@@ -77,6 +79,14 @@ public class Ingredient extends Model implements Serializable{
 	public void setWeight(Number weight) {
 		this.notifyUpdate("Weight", this.weight, weight);
 		this.weight = weight;
+	}
+	
+	public void setIngredientAvailability(boolean availability) {
+		this.availability = availability;
+	}
+	
+	public boolean getIngredientAvailability() {
+		return availability;
 	}
 
 }
