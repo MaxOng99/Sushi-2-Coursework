@@ -34,12 +34,14 @@ public class Configuration {
 	private List<User> users;
 	private ArrayList<Dish> dishes;
 	private ArrayList<Drone> drones;
+	private ArrayList<Order> orders;
 	
 	public Configuration(String filename, Server server, DishStockManager serverStockManager, IngredientStockManager serverIngredientManager) {
 		this.filename=filename;
 		this.server = server;	
 		this.users = new ArrayList<>();
 		this.dishes = new ArrayList<>();
+		this.orders = new ArrayList<>();
 		this.dishStockManager = serverStockManager;
 		this.ingredientStockManager = serverIngredientManager;
 		this.configDishStock = new ConcurrentHashMap<>();
@@ -113,11 +115,11 @@ public class Configuration {
 						if (supplier.getName().equals(splitted[3])) {
 							
 							if (validateNumeric(splitted[4]) && validateNumeric(splitted[5]) && validateNumeric(splitted[6])) {
-								int restockThreshold = Integer.parseInt(splitted[4]);
-								int restockAmount = Integer.parseInt(splitted[5]);
+								float restockThreshold = Float.parseFloat(splitted[4]);
+								float restockAmount = Float.parseFloat(splitted[5]);
 								int weight = Integer.parseInt(splitted[6]);
 								Ingredient ingredient = server.addIngredient(splitted[1], splitted[2], supplier, restockThreshold, restockAmount, weight);
-								configIngredientStock.put(ingredient, 0);
+								configIngredientStock.put(ingredient, (float)0);
 								break;
 							}
 						}
@@ -162,8 +164,8 @@ public class Configuration {
 					for (Ingredient ingredient: server.getIngredients()) {
 						if (ingredient.getName().equals(splitted[1])) {
 							if (validateNumeric(splitted[2])) {
-								int ingredientStock = Integer.parseInt(splitted[2]);
-								configIngredientStock.put(ingredient, ingredientStock);
+								float ingredientStock = Float.parseFloat(splitted[2]);
+								configIngredientStock.put(ingredient, (float)ingredientStock);
 								break;
 							}
 						}
@@ -198,7 +200,7 @@ public class Configuration {
 									}
 								}
 							}
-							server.addOrder(new Order(current));
+							this.orders.add(new Order(current));
 						}
 					}
 				}
@@ -208,6 +210,7 @@ public class Configuration {
 			dishStockManager.initializeStockFromConfig(configDishStock);
 			server.setDishesFromConfig(dishes);
 			server.setDronesFromConfig(drones);
+			server.setOrders(this.orders);
 			
 		}
 		catch(IOException e) {

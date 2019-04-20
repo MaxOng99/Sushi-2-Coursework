@@ -41,6 +41,9 @@ public class Server implements ServerInterface, UpdateListener{
 	private IngredientStockManager ingredientManager = new IngredientStockManager(this);
 	private DishStockManager dishManager = new DishStockManager(ingredientManager, this);
 	private BlockingQueue<Order> orderDeliveryQueue = new LinkedBlockingQueue<>();
+	private BlockingQueue<Order> waitingForDishRestock = new LinkedBlockingQueue<>();
+	private Object lockOrder = new Object();
+	private Object dishLock = new Object();
 	
 	
 	
@@ -58,6 +61,11 @@ public class Server implements ServerInterface, UpdateListener{
 		
 		for (ServerMailBox mailBox: mailBoxes) {
 			try {
+				if (!mailBox.getRegisteredUsers().isEmpty()) {
+					for(User user: mailBox.getRegisteredUsers()) {
+						this.users.add(user);
+					}
+				}
 				mailBox.sendInitialDataToClient();
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -92,6 +100,77 @@ public class Server implements ServerInterface, UpdateListener{
 		}
 	}
 	
+	public boolean checkLackingDish(Dish dish, int numberOfDishesOrdered) {
+		boolean lackDishes;
+		if (dishManager.getStock(dish) < numberOfDishesOrdered && dishManager.getStock(dish) >= (int) dish.getRestockThreshold()) {
+			dish.setRestockType("Extra");
+			lackDishes = true;
+			return true;
+		}
+		else if (dishManager.getStock(dish) < numberOfDishesOrdered && dishManager.getStock(dish) < (int) dish.getRestockThreshold()) {
+			dish.setRestockType("Normal");
+			lackDishes = true;
+		}
+		else {
+			lackDishes = false;
+		}
+		
+		return lackDishes;
+	}
+	public void setOrders(ArrayList<Order> ordersFromConfig) {
+		Thread checkAbleToDeliverThread = new Thread(new CheckAbleToDeliver());
+		checkAbleToDeliverThread.start();
+		this.orders = ordersFromConfig;
+		for (Order order: this.orders) {
+			order.setStatus("Incomplete");
+			order.addUpdateListener(this);
+			this.notifyUpdate();
+			Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
+			if (ableToDeliverOrder(order)) {
+				System.out.println("Able to delive order lol");
+				try {
+					orderDeliveryQueue.put(order);
+					for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
+						
+						for (Dish dish: getDishes()) {
+							String dishOrderedName = currentOrder.getKey().getName();
+							int currentDishStockDeducted = (int)currentOrder.getValue();
+							if (dish.getName().equals(dishOrderedName)) {
+								setStock(dish, -currentDishStockDeducted);
+								break;
+							}
+						}
+					}
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			else {
+				try {
+					for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
+						for (Dish dish: getDishes()) {
+							if (dish.getName().equals(currentOrder.getKey().getName())) {
+								if (checkLackingDish(dish, (int)currentOrder.getValue()) == true) {
+									if (dish.getRestockType().equals("Extra")) {
+										System.out.println("added to required extra stock dishlist");
+										dishManager.requireExtraStock(dish);
+									}
+									else {
+										dishManager.getLackIngredientList().put(dish);
+									}
+									break;
+								}
+							}
+						}
+					}
+					waitingForDishRestock.put(order);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	
 	@Override
 	public List<Dish> getDishes() {
 		return this.dishes;
@@ -115,7 +194,6 @@ public class Server implements ServerInterface, UpdateListener{
 	public Dish addDish(String name, String description, Number price, Number restockThreshold, Number restockAmount) {
 		Dish newDish = new Dish(name,description,price,restockThreshold,restockAmount);
 		newDish.addUpdateListener(this);
-		newDish.setRestockStatus(false);
 		this.dishes.add(newDish);
 		this.notifyUpdate();
 		return newDish;
@@ -136,19 +214,25 @@ public class Server implements ServerInterface, UpdateListener{
 	
 	@Override
 	public void setRestockingIngredientsEnabled(boolean enabled) {
-		//Notify drones that they do not need to restock anymore ingredients
+		for (Drone drone: this.drones) {
+			drone.setRestockStatus(false);
+		}
 	}
 
 	@Override
 	public void setRestockingDishesEnabled(boolean enabled) {
-		//Notify staff that they should not restock anymore dishes
+		for (Staff staff: this.staff) {
+			staff.setRestockStatus(false);
+		}
 		
 	}
 	
 	@Override
 	public void setStock(Dish dish, Number stock) {
-		dishManager.setStock(dish, stock);
-		this.notifyUpdate();
+		synchronized(dishLock) {
+			dishManager.setStock(dish, stock);
+			this.notifyUpdate();
+		}
 	}
 
 	@Override
@@ -238,16 +322,75 @@ public class Server implements ServerInterface, UpdateListener{
 		return mock;
 	}
 	
-	public void addOrder(Order order) {
-		order.setStatus("Incomplete");
-		order.addUpdateListener(this);
-		orders.add(order);
-		try {
-			orderDeliveryQueue.put(order);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+	public boolean ableToDeliverOrder(Order order) {
+		boolean ableToDeliver = false;
+		Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
+		for (Entry<Dish, Number> currentEntry: dishesOrdered.entrySet()) {
+			
+			for (Dish dish: getDishes()) {
+				if (dish.getName().equals(currentEntry.getKey().getName())) {
+					if (dishManager.getStock(dish) >= (int) currentEntry.getValue()) {
+						ableToDeliver = true;
+					}
+					else {
+						return false;
+					}
+				}
+			}
 		}
-		this.notifyUpdate();
+		return ableToDeliver;
+	}
+	
+	public void addOrder(Order order) {
+		
+		synchronized(lockOrder) {
+			order.setStatus("Incomplete");
+			order.addUpdateListener(this);
+			orders.add(order);
+			this.notifyUpdate();
+			Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
+			if (ableToDeliverOrder(order)) {
+				try {
+					orderDeliveryQueue.put(order);
+					for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
+						
+						for (Dish dish: getDishes()) {
+							String dishOrderedName = currentOrder.getKey().getName();
+							int currentDishStockDeducted = (int)currentOrder.getValue();
+							if (dish.getName().equals(dishOrderedName)) {
+								setStock(dish, -currentDishStockDeducted);
+								break;
+							}
+						}
+					}
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			else {
+				try {
+					for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
+						for (Dish dish: getDishes()) {
+							if (dish.getName().equals(currentOrder.getKey().getName())) {
+								if (checkLackingDish(dish, (int)currentOrder.getValue()) == true) {
+									if (dish.getRestockType().equals("Extra")) {
+										System.out.println("added to required extra stock dishlist");
+										dishManager.requireExtraStock(dish);
+									}
+									else {
+										dishManager.getLackIngredientList().put(dish);
+									}
+									break;
+								}
+							}
+						}
+					}
+					waitingForDishRestock.put(order);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}
 	}
 	@Override
 	public void removeStaff(Staff staff) {
@@ -294,7 +437,7 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public void addIngredientToDish(Dish dish, Ingredient ingredient, Number quantity) {
-		if(quantity == Integer.valueOf(0)) {
+		if(quantity == Float.valueOf(0)) {
 			removeIngredientFromDish(dish,ingredient);
 		} else {
 			dish.getRecipe().put(ingredient,quantity);
@@ -474,6 +617,38 @@ public class Server implements ServerInterface, UpdateListener{
 		if (oldValue != newValue) {
 			System.out.println(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
 			logger.info(updateProperty+" of "+modelName+" has changed from "+oldValue+" to "+newValue);
+		}
+	}
+	
+	class CheckAbleToDeliver implements Runnable{
+
+		@Override
+		public void run() {
+			while(true) {
+				try {
+					Order order = waitingForDishRestock.take();
+					if (ableToDeliverOrder(order)) {
+						orderDeliveryQueue.put(order);
+						Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
+						for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
+							
+							for (Dish dish: getDishes()) {
+								String dishOrderedName = currentOrder.getKey().getName();
+								int currentDishStockDeducted = (int)currentOrder.getValue();
+								if (dish.getName().equals(dishOrderedName)) {
+									setStock(dish, -currentDishStockDeducted);
+									break;
+								}
+							}
+						}
+					}
+					else {
+						waitingForDishRestock.put(order);
+					}
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 }

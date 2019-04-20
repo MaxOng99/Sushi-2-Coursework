@@ -9,6 +9,7 @@ import comp1206.sushi.server.Server;
 
 public class Staff extends Model implements Runnable{
 	
+	private boolean shouldRestock;
 	private Server server;
 	private String name;
 	private DishStockManager stockManager;
@@ -25,7 +26,14 @@ public class Staff extends Model implements Runnable{
 		kitchenStaff = new Thread(this);
 		kitchenStaff.start();
 	}
-
+	
+	public void setRestockStatus(boolean status) {
+		this.shouldRestock = status;
+	}
+	
+	public boolean shouldRestock() {
+		return this.shouldRestock;
+	}
 	public String getName() {
 		return name;
 	}
@@ -59,33 +67,48 @@ public class Staff extends Model implements Runnable{
 	}
 	
 	public void makeDishes() {
+	
 		try {
 			Dish dishTaken = dishRestockQueue.take();
+			System.out.println(dishTaken.getName());
 			Map<Ingredient, Number> recipe = dishTaken.getRecipe();
-			int currentStockValue = stockManager.getDishStock(dishTaken);
+			int currentStockValue = stockManager.getStock(dishTaken);
 			int restockThreshold = (int) dishTaken.getRestockThreshold();
 			int restockAmount = (int) dishTaken.getRestockAmount();
 			
-			while(currentStockValue < restockThreshold) {
-				this.setStatus("Restocking " + dishTaken + "...");
-				Thread.sleep(restockTime.nextInt(40001) + 30000);
+			if (dishTaken.getRestockType().equals("Extra")) {
+				this.setStatus("Restocking " + dishTaken + " ...");
 				for (Entry<Ingredient, Number> currentPair: recipe.entrySet()) {
-					server.setStock(currentPair.getKey(), - (int) currentPair.getValue());
+					server.setStock(currentPair.getKey(), -(restockAmount*(float) currentPair.getValue()));
 				}
+				Thread.sleep(restockTime.nextInt(40001) + 30000);
 				stockManager.getDishStockLevels().replace(dishTaken, restockAmount + currentStockValue);
+				
 				currentStockValue += restockAmount;
+				dishTaken.setRestockStatus(false);	
+				this.setStatus("Idle");
 			}
-			dishTaken.setAvailability(true);
-			dishTaken.setRestockStatus(false);
-			server.informClientsOfDishUpdates(dishTaken);
-			
-			this.setStatus("Idle");
+			else {
+				while(currentStockValue < restockThreshold) {
+					this.setStatus("Restocking " + dishTaken + "...");
+					for (Entry<Ingredient, Number> currentPair: recipe.entrySet()) {
+						server.setStock(currentPair.getKey(), -(restockAmount*(float) currentPair.getValue()));
+					}
+					Thread.sleep(restockTime.nextInt(40001) + 30000);
+					stockManager.getDishStockLevels().replace(dishTaken, restockAmount + currentStockValue);
+					
+					currentStockValue += restockAmount;
+				}
+				dishTaken.setRestockStatus(false);	
+				this.setStatus("Idle");
+			}
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
-	}
 	
+		}
+		
+	}
 	@Override
 	public void run() {
 	

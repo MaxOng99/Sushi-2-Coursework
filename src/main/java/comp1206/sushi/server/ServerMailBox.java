@@ -23,28 +23,27 @@ public class ServerMailBox implements Runnable{
 	private Comms serverSideComm;
 	private InetAddress clientIP;
 	private List<Order> orders;
+	private List<User> registeredUsers;
 	private boolean reloadedConfiguration;
 	
 	public ServerMailBox(Server server, Socket socket, InetAddress clientIP) {
 		this.reloadedConfiguration = false;
+		this.registeredUsers = new ArrayList<User>();
 		this.server = server;
 		serverSideComm = new Comms(socket, clientIP);
 		this.clientIP = clientIP;
 		this.orders = new CopyOnWriteArrayList<>();
 	}
 	
+	public List<User> getRegisteredUsers() {
+		return registeredUsers;
+	}
+	
 	public void sendInitialDataToClient() throws IOException{
 		
 		if (clientIP != null) {
-
-			List<Dish> dishesToSent = new ArrayList<>();
-			for (Dish dish: server.getDishes()) {
-				if (dish.getAvailability() == true) {
-					dishesToSent.add(dish);
-				}
-			}
 			Restaurant serverRestaurant = server.getRestaurant();
-			serverSideComm.sendMessage(dishesToSent);
+			serverSideComm.sendMessage(server.getDishes());
 			serverSideComm.sendMessage(serverRestaurant);
 		}
 		else {
@@ -58,35 +57,22 @@ public class ServerMailBox implements Runnable{
 	}
 	
 	public void addUser(User user) {
+		this.registeredUsers.add(user);
 		server.addUser(user);
 	}
 	
 	public void addNewOrder(Order order) {
 		User userOfNewOrder = order.getUser();
-		
+		String username = userOfNewOrder.getName();
+		String password = userOfNewOrder.getPassword();
 		for (User user: server.getUsers()) {
-			if (user.getName().equals(userOfNewOrder.getName()) && user.getPassword().equals(userOfNewOrder.getPassword())) {
+			if (user.getName().equals(username) && user.getPassword().equals(password)) {
 				server.addOrder(order);
+				System.out.println("Yee har");
 				this.orders.add(order);
 				Basket basket = order.getBasket();
 				user.updateBasket(basket);
-				break;
-			}
-		}
-		
-		Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
-		for (Entry<Dish, Number> dishQttyPair: dishesOrdered.entrySet()) {
-			
-			for (Dish dish: server.getDishes()) {
-				if (dish.getName().equals(dishQttyPair.getKey().getName())) {
-					server.setStock(dish, -(int) dishQttyPair.getValue());
-					
-					Map<Ingredient, Number> recipe = dish.getRecipe();
-					for(Entry<Ingredient, Number> currentEntry: recipe.entrySet()) {
-						server.setStock(currentEntry.getKey(), -(Float)currentEntry.getValue());
-					}
-					break;
-				}
+				break;   
 			}
 		}
 	}
@@ -160,6 +146,7 @@ public class ServerMailBox implements Runnable{
 					
 					if (order.getStatus().equals("Incomplete")) {
 						addNewOrder(order);
+						System.out.println("Added new Order from server mailBox");
 					}
 					
 					else if (order.getStatus().equals("Canceled")) {

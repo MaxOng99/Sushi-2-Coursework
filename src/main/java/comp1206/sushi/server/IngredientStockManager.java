@@ -13,7 +13,6 @@ import comp1206.sushi.common.Ingredient;
 public class IngredientStockManager {
 	
 	private Server server;
-	
 	private Random restockTime = new Random();
 	private Map<Ingredient, Number> ingredientStock;
 	private BlockingQueue<Ingredient> ingredientRestockQueue;
@@ -28,13 +27,20 @@ public class IngredientStockManager {
 	
 	public void initializeStockFromConfig(Map<Ingredient, Number> configStock) {
 		ingredientStock = configStock;
-		for (Entry<Ingredient, Number> currentIngredientStockPair: ingredientStock.entrySet()) {
-			if ((int)currentIngredientStockPair.getValue() < (int)currentIngredientStockPair.getKey().getRestockThreshold()) {
+		for (Entry<Ingredient, Number> currentEntry: ingredientStock.entrySet()) {
+			Ingredient currentIngredient = currentEntry.getKey();
+			float currentStock = (float) currentEntry.getValue();
+			if (currentStock < (float) currentIngredient.getRestockThreshold()) {
 				try {
-					ingredientRestockQueue.put(currentIngredientStockPair.getKey());
+					currentIngredient.setRestockStatus(true);
+					currentIngredient.setIngredientAvailability(false);
+					ingredientRestockQueue.put(currentIngredient);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
+			}
+			else {
+				currentIngredient.setIngredientAvailability(true);
 			}
 		}
 	}
@@ -43,8 +49,8 @@ public class IngredientStockManager {
 		return ingredientStock;
 	}
 	
-	public int getIngredientStock(Ingredient ingredient) {
-		return (int) ingredientStock.get(ingredient);
+	public Number getStock(Ingredient ingredient) {
+		return ingredientStock.get(ingredient);
 	}
 	
 	public BlockingQueue<Ingredient> getIngredientRestockQueue() {
@@ -56,22 +62,33 @@ public class IngredientStockManager {
 	}
 	
 	public void setStock(Ingredient ingredient, Number quantity){	
-		int ingredientQuantity = (int) ingredientStock.get(ingredient);
-		int newIngredientQuantity = (int) (ingredientQuantity + (int) quantity);
-		ingredientStock.replace(ingredient, newIngredientQuantity);
+		float ingredientQuantity = (float) ingredientStock.get(ingredient);
+		float newIngredientQuantity = ingredientQuantity + (float) quantity;
 		
-		if (newIngredientQuantity < (int) ingredient.getRestockThreshold()) {
+		if (newIngredientQuantity < 0) {
+			ingredientStock.replace(ingredient, (float)0);
+		}
+		else {
+			ingredientStock.replace(ingredient, newIngredientQuantity);
+		}
+		if (newIngredientQuantity < (float) ingredient.getRestockThreshold()) {
+			System.out.println("gonna go restock ingredients if condiition tru");
+			ingredient.setIngredientAvailability(false);
 			try {
-				if (ingredientRestockQueue.contains(ingredient)) {
-					System.out.println("Nope");
+				if (ingredientRestockQueue.contains(ingredient) || ingredient.beingRestocked() == true) {
+					System.out.println(ingredient + " being restocked already");
 				}
 				else {
 					ingredientRestockQueue.put(ingredient);
+					ingredient.setRestockStatus(true);
 				}
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+		}
+		else {
+			ingredient.setIngredientAvailability(true);
 		}
 	}
 }

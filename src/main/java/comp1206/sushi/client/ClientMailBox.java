@@ -16,6 +16,7 @@ public class ClientMailBox implements Runnable{
 	private Client client;
 	private Comms clientSideComm;
 	private User registeredUser;
+	private ArrayList<Dish> serverDishes = new ArrayList<>();
 	
 	public ClientMailBox(Client client, Socket socket) {
 		this.client = client;
@@ -49,6 +50,10 @@ public class ClientMailBox implements Runnable{
 		client.setRestaurantAndPostcodes(restaurant);
 	}
 	
+	public ArrayList<Dish> getDishes(){
+		return this.serverDishes;
+	}
+	
 	@Override
 	public void run() {
 		while (true) {
@@ -66,7 +71,14 @@ public class ClientMailBox implements Runnable{
 				
 				if (objectReceived instanceof ArrayList<?>) {
 					ArrayList<Dish> serverDishes = (ArrayList<Dish>) objectReceived;
-					setDishesInClient((ArrayList<Dish>) objectReceived);	
+					if (registeredUser == null) {
+						this.serverDishes = ((ArrayList<Dish>) objectReceived);	
+					}
+					else {
+						client.setDishes(serverDishes);
+						client.notifyUpdate();
+						System.out.println("I am running");
+					}
 				}
 				
 				else if (objectReceived instanceof Restaurant) {

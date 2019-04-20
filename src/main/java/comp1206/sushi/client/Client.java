@@ -111,6 +111,7 @@ public class Client implements ClientInterface {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+			setDishes(mailBox.getDishes());
 			return registeredUser;
 		}
 	}
@@ -128,6 +129,7 @@ public class Client implements ClientInterface {
 		catch(InterruptedException e2) {
 			e2.printStackTrace();
 		}
+		setDishes(mailBox.getDishes());
 		return getRegisteredUser();
 	}
 
@@ -138,7 +140,6 @@ public class Client implements ClientInterface {
 	
 	public void setDishes(ArrayList<Dish> serverDishes) {
 		dishes = serverDishes;
-		this.notifyUpdate();
 	}
 	@Override
 	public List<Dish> getDishes() {

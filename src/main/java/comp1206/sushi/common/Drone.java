@@ -15,6 +15,7 @@ public class Drone extends Model implements Runnable{
 	private Number capacity;
 	private Number battery;
 	
+	private boolean shouldRestock;
 	private volatile String status;
 	private volatile float distanceTravelled;
 	private Postcode restaurantPostcode;
@@ -54,8 +55,14 @@ public class Drone extends Model implements Runnable{
 	public Number getSpeed() {
 		return speed;
 	}
-
 	
+	public void setRestockStatus(boolean status) {
+		this.shouldRestock = status;
+	}
+	
+	public boolean shouldRestock() {
+		return this.shouldRestock;
+	}
 	public Number getProgress() {
 		return progress;
 	}
@@ -132,10 +139,11 @@ public class Drone extends Model implements Runnable{
 				}
 				
 				else {
+					ingredientTaken.setRestockStatus(true);
 					ingredientTaken.setIngredientAvailability(false);
-					int currentStockValue = (int)ingredientManager.getIngredientStock(ingredientTaken);
-					int restockThreshold = (int) ingredientTaken.getRestockThreshold();
-					int restockAmount = (int) ingredientTaken.getRestockAmount();
+					float currentStockValue = (float)ingredientManager.getStock(ingredientTaken);
+					float restockThreshold = (float) ingredientTaken.getRestockThreshold();
+					float restockAmount = (float) ingredientTaken.getRestockAmount();
 					this.setSource(restaurantPostcode);
 					this.setDestination(ingredientTaken.getSupplier().getPostcode());
 					double totalDistance = (double) this.getDestination().getDistance();
@@ -150,6 +158,7 @@ public class Drone extends Model implements Runnable{
 				        currentStockValue += restockAmount;
 					}
 					ingredientTaken.setIngredientAvailability(true);
+					ingredientTaken.setRestockStatus(false);
 				}
 				
 			} catch (InterruptedException e) {
