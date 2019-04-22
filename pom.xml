@@ -79,6 +79,11 @@
 			<artifactId>json</artifactId>
 			<version>20180813</version>
 		</dependency>
+		<dependency>
+		    <groupId>org.apache.commons</groupId>
+		    <artifactId>commons-lang3</artifactId>
+		    <version>3.0</version>
+		</dependency>
 	</dependencies>
 	<description>Sushi Coursework for COMP1206</description>
 </project>

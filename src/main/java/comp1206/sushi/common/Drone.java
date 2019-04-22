@@ -16,6 +16,7 @@ public class Drone extends Model implements Runnable{
 	private Number battery;
 	
 	private boolean shouldRestock;
+	private boolean removedFromServer;
 	private volatile String status;
 	private volatile float distanceTravelled;
 	private Postcode restaurantPostcode;
@@ -34,8 +35,12 @@ public class Drone extends Model implements Runnable{
 		this.setProgress(null);
 		this.droneThread = new Thread(this);
 		this.distanceTravelled = 0;
+		this.removedFromServer = false;
 	}
 	
+	public void deleteFromServer() {
+		removedFromServer = true;
+	}
 	public void setRestaurantPostcode(Postcode restaurantPostcode) {
 		this.restaurantPostcode = restaurantPostcode;
 		this.setSource(restaurantPostcode);
@@ -141,24 +146,36 @@ public class Drone extends Model implements Runnable{
 				else {
 					ingredientTaken.setRestockStatus(true);
 					ingredientTaken.setIngredientAvailability(false);
-					float currentStockValue = (float)ingredientManager.getStock(ingredientTaken);
-					float restockThreshold = (float) ingredientTaken.getRestockThreshold();
-					float restockAmount = (float) ingredientTaken.getRestockAmount();
+					int currentStockValue = (int)ingredientManager.getStock(ingredientTaken);
+					int restockThreshold = (int) ingredientTaken.getRestockThreshold();
+					int restockAmount = (int) ingredientTaken.getRestockAmount();
 					this.setSource(restaurantPostcode);
 					this.setDestination(ingredientTaken.getSupplier().getPostcode());
 					double totalDistance = (double) this.getDestination().getDistance();
 					double timeTaken = totalDistance / (Float) this.getSpeed();
-					
-					while (currentStockValue < restockThreshold) {
+					if (ingredientTaken.getRestockType().equals("Normal")) {
+						while (currentStockValue < restockThreshold) {
+							this.setStatus("Fetching " + ingredientTaken + "...");
+							ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);     
+					        scheduler.scheduleAtFixedRate(() -> this.outBoundProgress(scheduler, totalDistance), 0, 1, TimeUnit.SECONDS);
+					        Thread.sleep((long) (timeTaken * 1000 * 2));
+					        ingredientManager.directRestock(ingredientTaken, currentStockValue + restockAmount);
+					        currentStockValue += restockAmount;
+						}
+						ingredientTaken.setIngredientAvailability(true);
+						ingredientTaken.setRestockStatus(false);
+					}
+					else if (ingredientTaken.getRestockType().equals("Extra")) {
+						ingredientTaken.setRestockStatus(true);
 						this.setStatus("Fetching " + ingredientTaken + "...");
 						ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);     
 				        scheduler.scheduleAtFixedRate(() -> this.outBoundProgress(scheduler, totalDistance), 0, 1, TimeUnit.SECONDS);
 				        Thread.sleep((long) (timeTaken * 1000 * 2));
-				        ingredientManager.directRestock(ingredientTaken, currentStockValue + restockAmount);
-				        currentStockValue += restockAmount;
+				        ingredientManager.directRestock(ingredientTaken, (int)ingredientManager.getStock(ingredientTaken) + restockAmount);
+				        ingredientTaken.setRestockType("Normal");
+				        ingredientTaken.setIngredientAvailability(true);
+				        ingredientTaken.setRestockStatus(false);
 					}
-					ingredientTaken.setIngredientAvailability(true);
-					ingredientTaken.setRestockStatus(false);
 				}
 				
 			} catch (InterruptedException e) {
@@ -237,9 +254,8 @@ public class Drone extends Model implements Runnable{
 			if (distanceTravelled > totalDistance) {
 				this.setProgress(100);
 				try {
-					Thread.sleep(1000);
+					Thread.sleep(500);
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 				this.setProgress(null);
@@ -258,8 +274,14 @@ public class Drone extends Model implements Runnable{
 	@Override
 	public void run() {
 		while (true) {
-			restockIngredient();
-			deliverOrder();
+			if(!removedFromServer) {
+				restockIngredient();
+				deliverOrder();
+			}
+			
+			else {
+				return;
+			}
 		}
 	}
 }

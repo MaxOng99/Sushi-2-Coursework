@@ -16,7 +16,8 @@ public class Ingredient extends Model implements Serializable{
 	private Number restockThreshold;
 	private Number restockAmount;
 	private Number weight;
-
+	private volatile String restockType;
+	
 	public Ingredient(String name, String unit, Supplier supplier, Number restockThreshold,
 			Number restockAmount, Number weight) {
 		this.setName(name);
@@ -26,6 +27,15 @@ public class Ingredient extends Model implements Serializable{
 		this.setRestockAmount(restockAmount);
 		this.setWeight(weight);
 		this.setRestockStatus(false);
+		this.restockType = "Normal";
+	}
+	
+	public String getRestockType() {
+		return restockType;
+	}
+	
+	public void setRestockType(String type) {
+		this.restockType = type;
 	}
 	
 	public void setRestockStatus(boolean status) {
@@ -97,5 +107,4 @@ public class Ingredient extends Model implements Serializable{
 	public boolean getIngredientAvailability() {
 		return availability;
 	}
-
 }

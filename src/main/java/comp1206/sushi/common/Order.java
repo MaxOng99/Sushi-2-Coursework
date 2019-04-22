@@ -10,7 +10,7 @@ import comp1206.sushi.common.Order;
 public class Order extends Model implements Serializable {
 	
 	private static final long serialVersionUID = -5759545672682796841L;
-	private String status;
+	private volatile String status;
 	private Number cost;
 	private User user;
 	private Basket basket;

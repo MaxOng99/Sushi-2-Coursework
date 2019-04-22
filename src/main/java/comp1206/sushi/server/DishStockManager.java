@@ -28,8 +28,18 @@ public class DishStockManager {
 		checkAbleToRestock.start();
 	}
 	
+	public void clearAllData() {
+		dishStock.clear();
+		dishRestockQueue.clear();
+		lackIngredientList.clear();
+	}
+	
 	public void addDishToStockManager(Dish dish, Number quantity) {
 		dishStock.put(dish, quantity);
+	}
+	
+	public void removeDishFromStockManager(Dish dish) {
+		dishStock.remove(dish);
 	}
 	
 	public void initializeStockFromConfig(Map<Dish, Number> configStock) {
@@ -57,7 +67,6 @@ public class DishStockManager {
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-					System.out.println("added " + currentDish);
 				}
 			}
 		}
@@ -78,25 +87,33 @@ public class DishStockManager {
 	public boolean ableToRestock(Dish dish) {
 		
 		Map<Ingredient, Number> recipe = dish.getRecipe();
-		boolean ableToRestock = false;
+		boolean ableToRestock = true;
 		for (Entry<Ingredient, Number> currentEntry: recipe.entrySet()) {
 			Ingredient currentIngredient = currentEntry.getKey();
-			float quantityNeeded = (float)currentEntry.getValue();
-			if ((float)ingredientManager.getStock(currentIngredient) < quantityNeeded) {
-				break;
-			}
-			else {
-				ableToRestock = true;
+			int quantityNeeded = (int)currentEntry.getValue();
+			if ((int)ingredientManager.getStock(currentIngredient) < (int)dish.getRestockAmount()*quantityNeeded) {
+				if (currentIngredient.beingRestocked() == false) {
+					ingredientManager.requestRestock(currentIngredient);
+				}
+				ableToRestock = false;
 			}
 		}
 		return ableToRestock;
 	}
-
+	
+	public void checkLackingIngredient() {
+		
+	}
 	public void requireExtraStock(Dish dish) {
 		try {
 			if (ableToRestock(dish) == false) {
-				lackIngredientList.put(dish);
 				System.out.println("Not enough ingredients");
+				try {
+					lackIngredientList.put(dish);
+				}
+				catch(InterruptedException e) {
+					e.printStackTrace();
+				}
 			}
 			else {
 				if (dishRestockQueue.contains(dish)) {
@@ -132,8 +149,8 @@ public class DishStockManager {
 			if (newDishQuantity < (int) dish.getRestockThreshold()) {
 				try {
 					if (ableToRestock(dish) == false) {
-						lackIngredientList.put(dish);
 						System.out.println("Not enough ingredients");
+						lackIngredientList.put(dish);
 					}
 					else {
 						if (dishRestockQueue.contains(dish) || dish.beingRestocked() == true) {

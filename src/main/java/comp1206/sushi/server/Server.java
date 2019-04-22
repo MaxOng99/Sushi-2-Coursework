@@ -2,10 +2,13 @@ package comp1206.sushi.server;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.logging.log4j.LogManager;
@@ -28,8 +31,8 @@ public class Server implements ServerInterface, UpdateListener{
    private static final Logger logger = LogManager.getLogger("Server");
 	
 	private Restaurant restaurant = null;
-	private ArrayList<ServerMailBox> mailBoxes = new ArrayList<>();
-	private ArrayList<Dish> dishes = new ArrayList<Dish>();
+	private List<ServerMailBox> mailBoxes = Collections.synchronizedList(new ArrayList<ServerMailBox>());
+	private List<Dish> dishes = new CopyOnWriteArrayList<Dish>();
 	private ArrayList<Drone> drones = new ArrayList<Drone>();
 	private ArrayList<Ingredient> ingredients = new ArrayList<Ingredient>();
 	private ArrayList<Order> orders = new ArrayList<Order>();
@@ -38,37 +41,39 @@ public class Server implements ServerInterface, UpdateListener{
 	private ArrayList<User> users = new ArrayList<User>();
 	private ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
-	private IngredientStockManager ingredientManager = new IngredientStockManager(this);
-	private DishStockManager dishManager = new DishStockManager(ingredientManager, this);
 	private BlockingQueue<Order> orderDeliveryQueue = new LinkedBlockingQueue<>();
 	private BlockingQueue<Order> waitingForDishRestock = new LinkedBlockingQueue<>();
+	private IngredientStockManager ingredientManager = new IngredientStockManager(this);
+	private DishStockManager dishManager = new DishStockManager(ingredientManager, this);
 	private Object lockOrder = new Object();
 	private Object dishLock = new Object();
-	
-	
+	private Object userListLock = new Object();
 	
 	public Server() {
 		logger.info("Starting up server...");
 		restaurant = new Restaurant("Southampton Sushi", new Postcode("SO17 1BJ"));
-		Thread listenForClientThread = new Thread(new ClientListener(this, logger));
-		listenForClientThread.start();
+		Thread clientListenerThread = new Thread(new ClientListener(this, logger));
+		clientListenerThread.start();
 	}
 	
 	@Override
 	public void loadConfiguration(String filename) {
-		Configuration config = new Configuration(filename, this, dishManager, ingredientManager);	
-		System.out.println("Loaded configuration: " + filename);
+		logger.info("Loading configuration from " + filename);
+		System.out.println("Loading configuration " + filename);
+		new Configuration(filename, this, dishManager, ingredientManager);	
+		logger.info("Configuration successfuly loaded");
+		System.out.println("Configuration successfuly loaded");
 		
 		for (ServerMailBox mailBox: mailBoxes) {
 			try {
-				if (!mailBox.getRegisteredUsers().isEmpty()) {
-					for(User user: mailBox.getRegisteredUsers()) {
-						this.users.add(user);
-					}
+				User user = mailBox.getRegisteredUser();
+				if (user != null) {
+					this.addUser(user);
 				}
 				mailBox.sendInitialDataToClient();
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.info("Lost connection to client /127.0.0.1");
+				System.out.println("Lost connection to client /127.0.0.1");
 			}
 		}
 	}
@@ -77,7 +82,7 @@ public class Server implements ServerInterface, UpdateListener{
 		this.restaurant = restaurantFromConfig;
 	}
 	
-	public void setDishesFromConfig(ArrayList<Dish> dishesFromConfig) {
+	public void setDishesFromConfig(CopyOnWriteArrayList<Dish> dishesFromConfig) {
 		this.dishes = dishesFromConfig;
 		for (Dish dish: dishes) {
 			dish.addUpdateListener(this);
@@ -127,11 +132,10 @@ public class Server implements ServerInterface, UpdateListener{
 			this.notifyUpdate();
 			Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
 			if (ableToDeliverOrder(order)) {
-				System.out.println("Able to delive order lol");
 				try {
 					orderDeliveryQueue.put(order);
 					for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
-						
+						System.out.println(currentOrder.getKey().getName());
 						for (Dish dish: getDishes()) {
 							String dishOrderedName = currentOrder.getKey().getName();
 							int currentDishStockDeducted = (int)currentOrder.getValue();
@@ -164,6 +168,7 @@ public class Server implements ServerInterface, UpdateListener{
 						}
 					}
 					waitingForDishRestock.put(order);
+					System.out.println("Added " + order + " to waiting list");
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -180,6 +185,10 @@ public class Server implements ServerInterface, UpdateListener{
 		mailBoxes.add(mailBox);
 	}
 	
+	public void removeMailBoxes(ServerMailBox mailBox) {
+		mailBoxes.remove(mailBox);
+	}
+	
 	public void informClientsOfDishUpdates(Dish dish) {
 		for (ServerMailBox current: mailBoxes) {
 			try {
@@ -194,19 +203,49 @@ public class Server implements ServerInterface, UpdateListener{
 	public Dish addDish(String name, String description, Number price, Number restockThreshold, Number restockAmount) {
 		Dish newDish = new Dish(name,description,price,restockThreshold,restockAmount);
 		newDish.addUpdateListener(this);
+		newDish.setAvailability(true);
+		this.informClientsOfDishUpdates(newDish);
 		this.dishes.add(newDish);
 		this.notifyUpdate();
 		return newDish;
 	}
 	
 	@Override
-	public void removeDish(Dish dish) {
-		this.dishes.remove(dish);
-		dish.setAvailability(false);
-		this.informClientsOfDishUpdates(dish);
-		this.notifyUpdate();
+	public void removeDish(Dish dish) throws UnableToDeleteException{
+		 
+		if (dish.beingRestocked()) {
+			throw new UnableToDeleteException(dish.getName() + " is currently being restocked");
+		}
+		else if (dishBeingOrdered(dish)) {
+			throw new UnableToDeleteException(dish.getName() + " is in an order that is incomplete");
+		}
+		else {
+			this.dishes.remove(dish);
+			dishManager.removeDishFromStockManager(dish);
+			dish.setAvailability(false);
+			this.informClientsOfDishUpdates(dish);
+			this.notifyUpdate();
+		}
+		
 	}
 
+	public boolean dishBeingOrdered(Dish dish) {
+		boolean beingOrdered = false;
+		for (Order order: this.orders) {
+			String orderStatus = order.getStatus();
+			if (orderStatus.equals("Incomplete")) {
+				Map<Dish, Number> orderedDishes = order.getUser().getBasket().getBasketMap();
+				for (Dish orderedDish: orderedDishes.keySet()) {
+					if(orderedDish.getName().equals(dish.getName())) {
+						beingOrdered = true;
+						return beingOrdered;
+					}
+				}
+			}
+		}
+		return beingOrdered;
+	}
+	
 	@Override
 	public Map<Dish, Number> getDishStockLevels() {
 		return dishManager.getDishStockLevels();
@@ -248,19 +287,30 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public Ingredient addIngredient(String name, String unit, Supplier supplier,
-			Number restockThreshold, Number restockAmount, Number weight) {
+		Number restockThreshold, Number restockAmount, Number weight) {
 		Ingredient mockIngredient = new Ingredient(name,unit,supplier,restockThreshold,restockAmount,weight);
 		mockIngredient.addUpdateListener(this);
 		this.ingredients.add(mockIngredient);
+		ingredientManager.addIngredientToStockManager(mockIngredient, 0);
+		this.setStock(mockIngredient, 0);
 		this.notifyUpdate();
 		return mockIngredient;
 	}
 
 	@Override
-	public void removeIngredient(Ingredient ingredient) {
+	public void removeIngredient(Ingredient ingredient) throws UnableToDeleteException {
 		int index = this.ingredients.indexOf(ingredient);
-		this.ingredients.remove(index);
-		this.notifyUpdate();
+		if(ingredient.beingRestocked()) {
+			throw new UnableToDeleteException(ingredient.getName() + " is currently being restocked");
+		}
+		else if (checkIfIngredientInUse(ingredient)) {
+			throw new UnableToDeleteException(ingredient.getName() + " is still used");
+		}
+		else {
+			this.ingredients.remove(index);
+			ingredientManager.removeIngredientFromStockManager(ingredient);
+			this.notifyUpdate();
+		}
 	}
 
 	@Override
@@ -278,10 +328,16 @@ public class Server implements ServerInterface, UpdateListener{
 
 
 	@Override
-	public void removeSupplier(Supplier supplier) {
-		int index = this.suppliers.indexOf(supplier);
-		this.suppliers.remove(index);
-		this.notifyUpdate();
+	public void removeSupplier(Supplier supplier) throws UnableToDeleteException{
+		if (checkIfSupplierInUse(supplier)) {
+			throw new UnableToDeleteException(supplier.getName() + " is still supplying ingredients");
+		}
+		else {
+			int index = this.suppliers.indexOf(supplier);
+			this.suppliers.remove(index);
+			this.notifyUpdate();
+		}
+		
 	}
 
 	@Override
@@ -301,10 +357,16 @@ public class Server implements ServerInterface, UpdateListener{
 	}
 
 	@Override
-	public void removeDrone(Drone drone) {
-		int index = this.drones.indexOf(drone);
-		this.drones.remove(index);
-		this.notifyUpdate();
+	public void removeDrone(Drone drone) throws UnableToDeleteException{
+		if(checkIfDroneInUse(drone)) {
+			throw new UnableToDeleteException(drone.getName() + " is still in use");
+		}
+		else {
+			drone.deleteFromServer();
+			int index = this.drones.indexOf(drone);
+			this.drones.remove(index);
+			this.notifyUpdate();
+		}
 	}
 
 	@Override
@@ -323,17 +385,16 @@ public class Server implements ServerInterface, UpdateListener{
 	}
 	
 	public boolean ableToDeliverOrder(Order order) {
-		boolean ableToDeliver = false;
+		boolean ableToDeliver = true;
 		Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
 		for (Entry<Dish, Number> currentEntry: dishesOrdered.entrySet()) {
+			Iterator<Dish> serverDishIt = getDishes().iterator();
 			
-			for (Dish dish: getDishes()) {
+			while(serverDishIt.hasNext()) {
+				Dish dish = serverDishIt.next();
 				if (dish.getName().equals(currentEntry.getKey().getName())) {
-					if (dishManager.getStock(dish) >= (int) currentEntry.getValue()) {
-						ableToDeliver = true;
-					}
-					else {
-						return false;
+					if (dishManager.getStock(dish) < (int) currentEntry.getValue()) {
+						ableToDeliver = false;
 					}
 				}
 			}
@@ -353,13 +414,14 @@ public class Server implements ServerInterface, UpdateListener{
 				try {
 					orderDeliveryQueue.put(order);
 					for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
-						
-						for (Dish dish: getDishes()) {
-							String dishOrderedName = currentOrder.getKey().getName();
-							int currentDishStockDeducted = (int)currentOrder.getValue();
-							if (dish.getName().equals(dishOrderedName)) {
-								setStock(dish, -currentDishStockDeducted);
-								break;
+						String dishOrderedName = currentOrder.getKey().getName();
+						int currentDishStockDeducted = (int)currentOrder.getValue();
+						Iterator<Dish> dishIt = getDishes().iterator();
+						while(dishIt.hasNext()) {
+							Dish nextDish = dishIt.next();
+							if (nextDish.getName().equals(dishOrderedName)) {
+								setStock(nextDish, -currentDishStockDeducted);
+								System.out.println("Setted for " + nextDish.getName());
 							}
 						}
 					}
@@ -374,7 +436,6 @@ public class Server implements ServerInterface, UpdateListener{
 							if (dish.getName().equals(currentOrder.getKey().getName())) {
 								if (checkLackingDish(dish, (int)currentOrder.getValue()) == true) {
 									if (dish.getRestockType().equals("Extra")) {
-										System.out.println("added to required extra stock dishlist");
 										dishManager.requireExtraStock(dish);
 									}
 									else {
@@ -393,9 +454,14 @@ public class Server implements ServerInterface, UpdateListener{
 		}
 	}
 	@Override
-	public void removeStaff(Staff staff) {
-		this.staff.remove(staff);
-		this.notifyUpdate();
+	public void removeStaff(Staff staff) throws UnableToDeleteException{
+		if (checkIfStaffIsWorking(staff)) {
+			throw new UnableToDeleteException(staff.getName() + " is still working");
+		}
+		else {
+			this.staff.remove(staff);
+			this.notifyUpdate();
+		}
 	}
 
 	@Override
@@ -404,10 +470,15 @@ public class Server implements ServerInterface, UpdateListener{
 	}
 
 	@Override
-	public void removeOrder(Order order) {
-		int index = this.orders.indexOf(order);
-		this.orders.remove(index);
-		this.notifyUpdate();
+	public void removeOrder(Order order) throws UnableToDeleteException{
+		if (ableToDeleteOrder(order)) {
+			int index = this.orders.indexOf(order);
+			this.orders.remove(index);
+			this.notifyUpdate();
+		}
+		else {
+			throw new UnableToDeleteException(order.getName() + " is not complete yet");
+		}
 	}
 	
 	@Override
@@ -476,26 +547,53 @@ public class Server implements ServerInterface, UpdateListener{
 
 	@Override
 	public void removePostcode(Postcode postcode) throws UnableToDeleteException {
-		this.postcodes.remove(postcode);
-		this.notifyUpdate();
+		if(checkIfPostcodeInUse(postcode)) {
+			throw new UnableToDeleteException(postcode.getName() + " is still used by suppliers");
+		}
+		else {
+			this.postcodes.remove(postcode);
+			this.notifyUpdate();
+		}
 	}
 	
 	public void addUser(User user) {
-		users.add(user); 
+		synchronized(userListLock) {
+			users.add(user); 
+		}
 	}
 	
 	@Override
 	public List<User> getUsers() {
-		return this.users;
+		synchronized(userListLock) {
+			return this.users;
+		}
 	}
 	
 	@Override
-	public void removeUser(User user) {
-		this.users.remove(user);
-		this.notifyUpdate();
+	public void removeUser(User user) throws UnableToDeleteException{
+		synchronized(userListLock) {
+			
+			if(!(ableToDeleteUser(user))) {
+				throw new UnableToDeleteException(user.getName() + " still have outstanding orders");
+			}
+			
+			else {
+				this.users.remove(user);
+				this.notifyUpdate();
+			}
+		}
 	}
 	
-	
+	public boolean ableToDeleteUser(User user) {
+		boolean ableToDeleteUser = true;
+		for (Order order: user.getOrders()) {
+			if(!(ableToDeleteOrder(order))) {
+				ableToDeleteUser = false;
+				break;
+			}
+		}
+		return ableToDeleteUser;
+	}
 	@Override
 	public void setRecipe(Dish dish, Map<Ingredient, Number> recipe) {
 		for(Entry<Ingredient, Number> recipeItem : recipe.entrySet()) {
@@ -503,7 +601,7 @@ public class Server implements ServerInterface, UpdateListener{
 		}
 		this.notifyUpdate();
 	}
-
+	
 	@Override
 	public boolean isOrderComplete(Order order) {
 		if (order.getStatus().equals("Complete")) {
@@ -606,6 +704,72 @@ public class Server implements ServerInterface, UpdateListener{
 		return restaurant;
 	}
 	
+	public boolean ableToDeleteOrder(Order order) {
+		String orderStatus = order.getStatus();
+		if (orderStatus.equals("Complete") || orderStatus.equals("Canceled")) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	
+	public boolean checkIfDroneInUse(Drone drone) {
+		boolean isUsed = false;
+		if (!(drone.getStatus().equals("Idle"))) {
+			isUsed = true;
+		}
+		return isUsed;
+	}
+	
+	public boolean checkIfStaffIsWorking(Staff staff) {
+		boolean isWorking = false;
+		if (!(staff.getStatus().equals("Idle"))) {
+			isWorking = true;
+		}
+		return isWorking;
+	}
+	
+	public boolean checkIfIngredientInUse(Ingredient ingredient) {
+		boolean isUsed = false;
+		Iterator<Dish> serverDishIt = this.dishes.iterator();
+		while(serverDishIt.hasNext()) {
+			Dish nextDish = serverDishIt.next();
+			Map<Ingredient, Number> recipe = nextDish.getRecipe();
+			if (recipe.containsKey(ingredient)) {
+				isUsed = true;
+				break;
+			}
+		}
+		return isUsed;
+	}
+	
+	public boolean checkIfSupplierInUse(Supplier supplier) {
+		boolean isUsed = false;
+		Iterator<Ingredient> ingredientIt = this.ingredients.iterator();
+		while(ingredientIt.hasNext()) {
+			Ingredient nextIngredient = ingredientIt.next();
+			if (nextIngredient.getSupplier().equals(supplier)) {
+				isUsed = true;
+				break;
+			}
+		}
+		return isUsed;
+	}
+	
+	public boolean checkIfPostcodeInUse(Postcode postcode) {
+		boolean isUsed = false;
+		Iterator<Supplier> supplierIt = this.suppliers.iterator();
+		while(supplierIt.hasNext()) {
+			Supplier nextSupplier = supplierIt.next();
+			if (nextSupplier.getPostcode().equals(postcode)) {
+				isUsed = true;
+				break;
+			}
+		}
+		return isUsed;
+	}
+	
 	@Override
 	public void updated(UpdateEvent updateEvent) {
 		this.notifyUpdate();
@@ -631,11 +795,12 @@ public class Server implements ServerInterface, UpdateListener{
 						orderDeliveryQueue.put(order);
 						Map<Dish, Number> dishesOrdered = order.getUser().getBasket().getBasketMap();
 						for (Entry<Dish, Number> currentOrder: dishesOrdered.entrySet()) {
-							
-							for (Dish dish: getDishes()) {
-								String dishOrderedName = currentOrder.getKey().getName();
-								int currentDishStockDeducted = (int)currentOrder.getValue();
-								if (dish.getName().equals(dishOrderedName)) {
+							Iterator<Dish> dishIt = getDishes().iterator();
+							String dishOrderedName = currentOrder.getKey().getName();
+							int currentDishStockDeducted = (int) currentOrder.getValue();
+							while(dishIt.hasNext()) {
+								Dish dish = dishIt.next();
+								if(dish.getName().equals(dishOrderedName)) {
 									setStock(dish, -currentDishStockDeducted);
 									break;
 								}

@@ -18,12 +18,6 @@ public class Postcode extends Model implements Serializable{
 		calculateLatLong();
 	}
 	
-	public Postcode(String code, Restaurant restaurant) {
-		this.name = code;
-		calculateLatLong();
-		calculateDistance(restaurant);
-	}
-	
 	@Override
 	public String getName() {
 		return this.name;
@@ -91,5 +85,4 @@ public class Postcode extends Model implements Serializable{
 			e.printStackTrace();
 		}
 	}
-	
 }

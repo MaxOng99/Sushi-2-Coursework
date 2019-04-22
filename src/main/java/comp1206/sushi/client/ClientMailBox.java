@@ -5,6 +5,8 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.ListIterator;
 
+import org.apache.logging.log4j.Logger;
+
 import comp1206.sushi.common.Comms;
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Order;
@@ -18,14 +20,11 @@ public class ClientMailBox implements Runnable{
 	private User registeredUser;
 	private ArrayList<Dish> serverDishes = new ArrayList<>();
 	
-	public ClientMailBox(Client client, Socket socket) {
+	public ClientMailBox(Client client, Socket socket, Logger logger) {
 		this.client = client;
-		this.clientSideComm = new Comms(socket);
+		this.clientSideComm = new Comms(socket, logger);
 	}
 	
-	public void setRegisteredUser(User registeredUser) {
-		this.registeredUser = registeredUser;
-	}
 	public void requestRegistration(User newUser) throws IOException{
 		clientSideComm.sendMessage(newUser);
 	}
@@ -34,20 +33,24 @@ public class ClientMailBox implements Runnable{
 		clientSideComm.sendMessage(credentials);
 	}
 	
-	public void notifyNewOrder(Order newOrder) throws IOException {
-		clientSideComm.sendMessage(newOrder);
-	}
-	
 	public void requestOderCancelation(Order orderToCancel) throws IOException {
 		clientSideComm.sendMessage(orderToCancel);
+	}
+	
+	public void setRestaurantInClient(Restaurant restaurant) {
+		client.setRestaurantAndPostcodes(restaurant);
+	}
+	
+	public void setRegisteredUser(User registeredUser) {
+		this.registeredUser = registeredUser;
 	}
 	
 	public void setDishesInClient(ArrayList<Dish> serverDishes) {
 		client.setDishes(serverDishes);
 	}
 	
-	public void setRestaurantInClient(Restaurant restaurant) {
-		client.setRestaurantAndPostcodes(restaurant);
+	public void notifyNewOrder(Order newOrder) throws IOException {
+		clientSideComm.sendMessage(newOrder);
 	}
 	
 	public ArrayList<Dish> getDishes(){
@@ -57,13 +60,10 @@ public class ClientMailBox implements Runnable{
 	@Override
 	public void run() {
 		while (true) {
-			
 			Object objectReceived = clientSideComm.receiveMessage(this);
-			
 			if (objectReceived == null) {
 				return;
 			}
-			
 			else {
 				if (objectReceived instanceof User) {
 					client.setRegisteredUser((User) objectReceived);
@@ -71,13 +71,12 @@ public class ClientMailBox implements Runnable{
 				
 				if (objectReceived instanceof ArrayList<?>) {
 					ArrayList<Dish> serverDishes = (ArrayList<Dish>) objectReceived;
-					if (registeredUser == null) {
+					if (client.getRegisteredUser() == null) {
 						this.serverDishes = ((ArrayList<Dish>) objectReceived);	
 					}
 					else {
 						client.setDishes(serverDishes);
 						client.notifyUpdate();
-						System.out.println("I am running");
 					}
 				}
 				
@@ -95,10 +94,10 @@ public class ClientMailBox implements Runnable{
 				
 				else if (objectReceived instanceof Order) {
 					Order order = (Order) objectReceived;
-					
 					for (Order userOrder: registeredUser.getOrders()) {
 						if (order.getName().equals(userOrder.getName())) {
 							userOrder.setStatus("Complete");
+							break;
 						}
 					}
 				}
@@ -108,7 +107,6 @@ public class ClientMailBox implements Runnable{
 					if (dishReceived.getAvailability() == true) {
 						client.addNewDish(dishReceived);
 					}
-					
 					else {
 						ListIterator<Dish> dishIt = client.getDishes().listIterator();
 						while(dishIt.hasNext()) {

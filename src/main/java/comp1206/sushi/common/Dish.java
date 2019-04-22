@@ -106,6 +106,5 @@ public class Dish extends Model implements Serializable{
 
 	public Number getRestockAmount() {
 		return this.restockAmount;
-	}
-
+	}	
 }

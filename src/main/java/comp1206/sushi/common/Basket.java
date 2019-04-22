@@ -8,7 +8,7 @@ import java.util.Map.Entry;
 public class Basket implements Serializable{
 	
 	private static final long serialVersionUID = -1803572769884618746L;
-	private float cost;
+	private int cost;
 	private Map<Dish, Number> basketMap;
 	
 	public Basket() {
@@ -23,15 +23,15 @@ public class Basket implements Serializable{
 	
 	public void addDishToBasket(Dish dish, Number quantity) {
 		if (basketMap.containsKey(dish)) {
-			cost -= (Float) dish.getPrice() * (Integer) basketMap.get(dish);
+			cost -= (int) dish.getPrice() * (int) basketMap.get(dish);
 		}
-		cost += ((Float) dish.getPrice() * (Integer) quantity);
+		cost += ((int) dish.getPrice() * (int) quantity);
 		basketMap.put(dish, quantity);
 		
 	}
 	
 	public void updateDishInBasket(Dish dish, Number quantity) {
-		float cost = 0;
+		int cost = 0;
 		setCost(cost);
 		
 		if ( (Integer) quantity == 0) {
@@ -49,7 +49,7 @@ public class Basket implements Serializable{
 		setCost(cost);
 	}
 	
-	public void setCost(float newCost) {
+	public void setCost(int newCost) {
 		cost = newCost;
 	}
 	public Number getCost() {

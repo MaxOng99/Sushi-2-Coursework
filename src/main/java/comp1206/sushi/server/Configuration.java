@@ -6,9 +6,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.apache.commons.lang3.StringUtils;
 
 import comp1206.sushi.common.Basket;
 import comp1206.sushi.common.Dish;
@@ -18,42 +20,41 @@ import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Postcode;
 import comp1206.sushi.common.Restaurant;
 import comp1206.sushi.common.Supplier;
-//import org.apache.commons.lang3.StringUtils;
 import comp1206.sushi.common.User;
 
 public class Configuration {
 	
-	private Server server;
 	private String filename;
+	private Server server;
 	private Postcode restaurantPostcode;
 	private String restaurantName;
+	private ArrayList<User> users;
+	private CopyOnWriteArrayList<Dish> dishes;
+	private ArrayList<Drone> drones;
+	private ArrayList<Order> orders;
 	private DishStockManager dishStockManager;
 	private IngredientStockManager ingredientStockManager;
 	private Map<Dish, Number> configDishStock;
 	private Map<Ingredient, Number> configIngredientStock;
-	private List<User> users;
-	private ArrayList<Dish> dishes;
-	private ArrayList<Drone> drones;
-	private ArrayList<Order> orders;
 	
 	public Configuration(String filename, Server server, DishStockManager serverStockManager, IngredientStockManager serverIngredientManager) {
 		this.filename=filename;
 		this.server = server;	
 		this.users = new ArrayList<>();
-		this.dishes = new ArrayList<>();
+		this.dishes = new CopyOnWriteArrayList<>();
 		this.orders = new ArrayList<>();
-		this.dishStockManager = serverStockManager;
-		this.ingredientStockManager = serverIngredientManager;
+		this.drones = new ArrayList<>();
 		this.configDishStock = new ConcurrentHashMap<>();
 		this.configIngredientStock = new ConcurrentHashMap<>();
-		this.drones = new ArrayList<>();
+		this.ingredientStockManager = serverIngredientManager;
+		this.dishStockManager = serverStockManager;
 		removeServerData();
 		
 		try {
-			readLine();
+			readDataFromConfig();
 		}
-		catch(FileNotFoundException lol) {
-			System.err.println(lol.getMessage());
+		catch(FileNotFoundException fnfe) {
+			fnfe.printStackTrace();
 		}
 	}
 	
@@ -68,58 +69,55 @@ public class Configuration {
 		server.getPostcodes().clear();
 	}
 	
-	public void readLine() throws FileNotFoundException {
+	public void readDataFromConfig() throws FileNotFoundException {
 		BufferedReader bf = new BufferedReader(new FileReader(filename));
 		String line;
 	
 		try {
 			while((line = bf.readLine()) != null) {
-				String[] splitted = line.split(":");
+				String[] data = line.split(":");
 				
 				if (line.contains("POSTCODE")) {
-					server.addPostcode(splitted[1]);
+					server.addPostcode(data[1]);
 				}
 				
 				else if (line.contains("RESTAURANT")) {
-					restaurantName = splitted[1];
-					server.addPostcode(splitted[2]);
-					restaurantPostcode = new Postcode(splitted[2]);
+					restaurantName = data[1];
+					restaurantPostcode = null;
+					for (Postcode currentPostcode: server.getPostcodes()) {
+						if (currentPostcode.getName().equals(data[2])) {
+							restaurantPostcode = currentPostcode;
+							break;
+						}
+					}
+					
+					if (restaurantPostcode == null) {
+						Postcode newPostcode = server.addPostcode(data[2]);
+						restaurantPostcode = newPostcode;
+					}
+					
 					Restaurant restaurant = new Restaurant(restaurantName, restaurantPostcode);
 					server.setRestaurantFromConfig(restaurant);
 				}
 				
 				else if (line.contains("SUPPLIER")) {
-					
 					for (Postcode postcode: server.getPostcodes()) {
-						if (postcode.getName().equals(splitted[2])) {			
-							server.addSupplier(splitted[1], postcode);
+						if (postcode.getName().equals(data[2])) {			
+							server.addSupplier(data[1], postcode);
 							break;
 						}
 					}
 				}
 				
-				else if (line.contains("STAFF")) {
-					server.addStaff(splitted[1]);
-				}
-				
-				else if (line.contains("DRONE")) {
-					
-					if (validateNumeric(splitted[1]) == true) {
-						float droneSpeed = Float.parseFloat(splitted[1]);
-						drones.add(new Drone(droneSpeed));
-					}
-				}
-				
 				else if (line.contains("INGREDIENT")) {
 					for (Supplier supplier: server.getSuppliers()) {
-						if (supplier.getName().equals(splitted[3])) {
-							
-							if (validateNumeric(splitted[4]) && validateNumeric(splitted[5]) && validateNumeric(splitted[6])) {
-								float restockThreshold = Float.parseFloat(splitted[4]);
-								float restockAmount = Float.parseFloat(splitted[5]);
-								int weight = Integer.parseInt(splitted[6]);
-								Ingredient ingredient = server.addIngredient(splitted[1], splitted[2], supplier, restockThreshold, restockAmount, weight);
-								configIngredientStock.put(ingredient, (float)0);
+						if (supplier.getName().equals(data[3])) {
+							if (validateNumeric(data[4]) && validateNumeric(data[5]) && validateNumeric(data[6])) {
+								int restockThreshold = Integer.parseInt(data[4]);
+								int restockAmount = Integer.parseInt(data[5]);
+								int weight = Integer.parseInt(data[6]);
+								Ingredient ingredient = server.addIngredient(data[1], data[2], supplier, restockThreshold, restockAmount, weight);
+								configIngredientStock.put(ingredient, (int)0);
 								break;
 							}
 						}
@@ -127,17 +125,17 @@ public class Configuration {
 				}
 				
 				else if (line.contains("DISH")) {
-					float price = Float.parseFloat(splitted[3]);
-					int restockThreshold = Integer.parseInt(splitted[4]);
-					int restockAmount = Integer.parseInt(splitted[5]);
-					String[] recipe = splitted[6].split(",");
+					int price = Integer.parseInt(data[3]);
+					int restockThreshold = Integer.parseInt(data[4]);
+					int restockAmount = Integer.parseInt(data[5]);
+					String[] recipe = data[6].split(",");
 					Map<Ingredient, Number> dishRecipe = new HashMap<>();
-					Dish dishToAdd = new Dish(splitted[1], splitted[2], price, restockThreshold, restockAmount);
+					Dish dishToAdd = new Dish(data[1], data[2], price, restockThreshold, restockAmount);
 					dishes.add(dishToAdd);
-					configDishStock.put(dishToAdd, 0);
+					configDishStock.put(dishToAdd, (int)0);
 					for (String current: recipe) {
 						String[] ingredientQttyPair = current.split(" \\* ");
-						float quantity = Float.parseFloat(ingredientQttyPair[0]);
+						int quantity = Integer.parseInt(ingredientQttyPair[0]);
 						
 						for (Ingredient currentIngredient: server.getIngredients()) {
 							if (currentIngredient.getName().equals(ingredientQttyPair[1])) {
@@ -146,15 +144,55 @@ public class Configuration {
 							}
 						}
 					}
-					
 					dishToAdd.setRecipe(dishRecipe);
+				}
+				
+				else if (line.contains("USER")) {
+					Postcode userPostcode = null;
+					for (Postcode current: server.getPostcodes()) {
+						if (current.getName().equals(data[4])) {
+							userPostcode = current;
+							break;
+						}
+					}
+					
+					if (userPostcode == null) {
+						Postcode newPostcode = server.addPostcode(data[4]);
+						userPostcode = newPostcode;
+					}
+					
+					User userFromConfig = new User(data[1], data[2], data[3], userPostcode);
+					users.add(userFromConfig);
+					server.addUser(userFromConfig);
+				}
+				
+				else if (line.contains("ORDER")) {
+					for (User current: users) {
+						if (current.getName().equals(data[1])) {
+							Basket userBasket = current.getBasket();
+							String[] orders = data[2].split(",");
+							for (String currentOrder: orders) {
+								String[] orderQuantityPair = currentOrder.split(" \\* ");
+								for (Dish currentDish: dishes) {
+									if (currentDish.getName().equals(orderQuantityPair[1])) {
+										int quantity = Integer.parseInt(orderQuantityPair[0]);
+										userBasket.addDishToBasket(currentDish, quantity);
+										break;
+									}
+								}
+							}
+							Order currentOrder = new Order(current);
+							current.addNewOrder(currentOrder);
+							this.orders.add(currentOrder);
+						}
+					}
 				}
 				
 				else if (line.contains("STOCK")) {
 					for (Dish dish: dishes) {
-						if (dish.getName().equals(splitted[1])) {
-							if (validateNumeric(splitted[2])) {
-								int dishStock = Integer.parseInt(splitted[2]);
+						if (dish.getName().equals(data[1])) {
+							if (validateNumeric(data[2])) {
+								int dishStock = Integer.parseInt(data[2]);
 								configDishStock.put(dish, dishStock);
 								break;
 							}
@@ -162,46 +200,24 @@ public class Configuration {
 					}
 					
 					for (Ingredient ingredient: server.getIngredients()) {
-						if (ingredient.getName().equals(splitted[1])) {
-							if (validateNumeric(splitted[2])) {
-								float ingredientStock = Float.parseFloat(splitted[2]);
-								configIngredientStock.put(ingredient, (float)ingredientStock);
+						if (ingredient.getName().equals(data[1])) {
+							if (validateNumeric(data[2])) {
+								int ingredientStock = Integer.parseInt(data[2]);
+								configIngredientStock.put(ingredient, (int)ingredientStock);
 								break;
 							}
 						}
 					}
 				}
 				
-				else if (line.contains("USER")) {
-					Postcode userPostcode = null;
-					for (Postcode current: server.getPostcodes()) {
-						if (current.getName().equals(splitted[4])) {
-							userPostcode = current;
-							break;
-						}
-					}
-					User userFromConfig = new User(splitted[1], splitted[2], splitted[3],userPostcode);
-					users.add(userFromConfig);
-					server.getUsers().add(userFromConfig);
+				else if (line.contains("STAFF")) {
+					server.addStaff(data[1]);
 				}
 				
-				else if (line.contains("ORDER")) {
-					for (User current: users) {
-						String userName = splitted[1];
-						if (current.getName().equals(userName)) {
-							Basket userBasket = current.getBasket();
-							String[] orders = splitted[2].split(",");
-							for (String currentOrder: orders) {
-								String[] orderQuantityPair = currentOrder.split(" \\* ");
-								for (Dish currentDish: dishes) {
-									if (currentDish.getName().equals(orderQuantityPair[1])) {
-										int quantity = Integer.parseInt(orderQuantityPair[0]);
-										userBasket.addDishToBasket(currentDish, quantity);
-									}
-								}
-							}
-							this.orders.add(new Order(current));
-						}
+				else if (line.contains("DRONE")) {
+					if (validateNumeric(data[1]) == true) {
+						float droneSpeed = Float.parseFloat(data[1]);
+						drones.add(new Drone(droneSpeed));
 					}
 				}
 			}
@@ -211,21 +227,17 @@ public class Configuration {
 			server.setDishesFromConfig(dishes);
 			server.setDronesFromConfig(drones);
 			server.setOrders(this.orders);
-			
 		}
 		catch(IOException e) {
-			System.err.print(e.getMessage());
+			e.printStackTrace();
 		}
 	}
 	public boolean validateNumeric(String value) {
-		/*
-		if (isNumeric(value)) {
+		if (StringUtils.isNumeric(value)) {
 			return true;
 		}
 		else {
 			return false;
 		}
-		*/
-		return true;
 	}
 }

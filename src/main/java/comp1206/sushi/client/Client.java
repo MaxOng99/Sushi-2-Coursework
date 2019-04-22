@@ -72,7 +72,7 @@ public class Client implements ClientInterface {
 		logger.info("Connecting to server...");
 		Socket clientSock = new Socket("127.0.0.1", 49920);
 		System.out.println("Connected to server");
-		mailBox = new ClientMailBox(this, clientSock);
+		mailBox = new ClientMailBox(this, clientSock, logger);
 		Thread msgManagerThread = new Thread(mailBox);
 		msgManagerThread.start();
 	}
@@ -187,7 +187,7 @@ public class Client implements ClientInterface {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		//clearBasket(user);
+		clearBasket(user);
 		return newOrder;
 	}
 
