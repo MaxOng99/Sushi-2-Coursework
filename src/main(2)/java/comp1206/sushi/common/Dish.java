@@ -10,16 +10,16 @@ import comp1206.sushi.common.Ingredient;
 public class Dish extends Model implements Serializable{
 	
 	private static final long serialVersionUID = -350158669810498848L;
-	private volatile boolean beingRestocked;
-	private volatile boolean availability;
-	private Map <Ingredient,Number> recipe;
 	private String name;
 	private String description;
 	private String restockType;
 	private Number price;
+	private Map <Ingredient,Number> recipe;
 	private Number restockThreshold;
 	private Number restockAmount;
-	
+	private volatile boolean beingRestocked;
+	private volatile boolean availability;
+
 	public Dish(String name, String description, Number price, Number restockThreshold, Number restockAmount) {
 		this.name = name;
 		this.description = description;
@@ -27,7 +27,7 @@ public class Dish extends Model implements Serializable{
 		this.restockThreshold = restockThreshold;
 		this.restockAmount = restockAmount;
 		this.recipe = new HashMap<Ingredient,Number>();
-		this.beingRestocked = false;
+		this.setRestockStatus(false);
 		this.restockType = "Normal";
 	}
 	
@@ -54,7 +54,6 @@ public class Dish extends Model implements Serializable{
 	public String getRestockType() {
 		return this.restockType;
 	}
-	
 	public String getName() {
 		return name;
 	}

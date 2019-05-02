@@ -101,6 +101,9 @@ public class DishStockManager {
 		return ableToRestock;
 	}
 	
+	public void checkLackingIngredient() {
+		
+	}
 	public void requireExtraStock(Dish dish) {
 		try {
 			if (ableToRestock(dish) == false) {

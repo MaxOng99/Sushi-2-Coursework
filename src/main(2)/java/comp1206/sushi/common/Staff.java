@@ -61,16 +61,6 @@ public class Staff extends Model implements Runnable{
 		this.notifyUpdate();
 		this.fatigue = fatigue;
 	}
-	
-	public int calculateFatigue(int fatigueNumber) {
-		int fatigue = (int)this.fatigue + fatigueNumber;
-		if(fatigue >= 100) {
-			return 100;
-		}
-		else {
-			return fatigue;
-		}
-	}
 
 	public String getStatus() {
 		return status;
@@ -81,29 +71,29 @@ public class Staff extends Model implements Runnable{
 		this.status = status;
 	}
 	
-	@Override
-	public void run() {
-		while(true) {
-			makeDishes();
-		}
-	}
-	
 	public void makeDishes() {
 		
 		if ((int)fatigue < 100) {
 			try {
-				isRestocking = true;
 				Dish dishTaken = dishRestockQueue.take();
+				isRestocking = true;
 				Map<Ingredient, Number> recipe = dishTaken.getRecipe();
 				int currentStockValue = stockManager.getStock(dishTaken);
 				int restockThreshold = (int) dishTaken.getRestockThreshold();
 				int restockAmount = (int) dishTaken.getRestockAmount();
+				
 				if (dishTaken.getRestockType().equals("Extra")) {
 					this.setStatus("Restocking " + dishTaken + " ...");
 					for (Entry<Ingredient, Number> currentPair: recipe.entrySet()) {
 						server.setStock(currentPair.getKey(), -(restockAmount*(int) currentPair.getValue()));
 					}
-					this.setFatigue(calculateFatigue(restockAmount));
+					fatigue = (int) this.fatigue + restockAmount;
+					if ((int)fatigue > 100) {
+						this.setFatigue(100);
+					}
+					else {
+						this.setFatigue(fatigue);
+					}
 					Thread.sleep(restockTime.nextInt(40001) + 30000);
 					stockManager.getDishStockLevels().replace(dishTaken, restockAmount + currentStockValue);
 					currentStockValue += restockAmount;
@@ -117,7 +107,13 @@ public class Staff extends Model implements Runnable{
 						for (Entry<Ingredient, Number> currentPair: recipe.entrySet()) {
 							server.setStock(currentPair.getKey(), -(restockAmount*(int) currentPair.getValue()));
 						}
-						this.setFatigue(calculateFatigue(restockAmount));
+						fatigue = (int) this.fatigue + restockAmount;
+						if ((int)fatigue > 100) {
+							this.setFatigue(100);
+						}
+						else {
+							this.setFatigue(fatigue);
+						}
 						Thread.sleep(restockTime.nextInt(40001) + 30000);
 						stockManager.getDishStockLevels().replace(dishTaken, restockAmount + currentStockValue);
 						currentStockValue += restockAmount;
@@ -127,11 +123,20 @@ public class Staff extends Model implements Runnable{
 					this.setStatus("Idle");
 				}
 			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
-
+	
+	@Override
+	public void run() {
+	
+		while(true) {
+			makeDishes();
+		}
+	}
+	
 	private class MonitorFatigueLevel implements Runnable {
 
 		@Override
@@ -140,8 +145,7 @@ public class Staff extends Model implements Runnable{
 				if ((int)getFatigue() == 100) {
 					int fatigue = (int)getFatigue();
 					while (fatigue > 0) {
-						setFatigue(calculateFatigue(-1));
-						fatigue--;
+						setFatigue(--fatigue);
 						try {
 							Thread.sleep(1500);
 						} catch (InterruptedException e) {
@@ -151,13 +155,11 @@ public class Staff extends Model implements Runnable{
 				}
 				else if (isRestocking == false) {
 					int fatigue = (int) getFatigue();
-					while(fatigue > 0) {
-						setFatigue(calculateFatigue(-1));
-						fatigue--;
+					if (fatigue > 0) {
+						setFatigue(--fatigue);
 						try {
 							Thread.sleep(3000);
-						}
-						catch(InterruptedException e) {
+						} catch (InterruptedException e) {
 							e.printStackTrace();
 						}
 					}

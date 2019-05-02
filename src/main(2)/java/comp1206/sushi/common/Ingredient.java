@@ -10,13 +10,13 @@ public class Ingredient extends Model implements Serializable{
 	private static final long serialVersionUID = -2146403233795769902L;
 	private volatile boolean availability;
 	private volatile boolean beingRestocked;
-	private volatile String restockType;
 	private String name;
 	private String unit;
+	private Supplier supplier;
 	private Number restockThreshold;
 	private Number restockAmount;
 	private Number weight;
-	private Supplier supplier;
+	private volatile String restockType;
 	
 	public Ingredient(String name, String unit, Supplier supplier, Number restockThreshold,
 			Number restockAmount, Number weight) {
@@ -27,15 +27,15 @@ public class Ingredient extends Model implements Serializable{
 		this.setRestockAmount(restockAmount);
 		this.setWeight(weight);
 		this.setRestockStatus(false);
-		this.setRestockType("Normal");
-	}
-	
-	public void setRestockType(String type) {
-		this.restockType = type;
+		this.restockType = "Normal";
 	}
 	
 	public String getRestockType() {
 		return restockType;
+	}
+	
+	public void setRestockType(String type) {
+		this.restockType = type;
 	}
 	
 	public void setRestockStatus(boolean status) {
@@ -44,14 +44,6 @@ public class Ingredient extends Model implements Serializable{
 	
 	public boolean beingRestocked() {
 		return beingRestocked;
-	}
-	
-	public void setIngredientAvailability(boolean availability) {
-		this.availability = availability;
-	}
-	
-	public boolean getIngredientAvailability() {
-		return availability;
 	}
 	
 	public String getName() {
@@ -106,5 +98,13 @@ public class Ingredient extends Model implements Serializable{
 	public void setWeight(Number weight) {
 		this.notifyUpdate("Weight", this.weight, weight);
 		this.weight = weight;
+	}
+	
+	public void setIngredientAvailability(boolean availability) {
+		this.availability = availability;
+	}
+	
+	public boolean getIngredientAvailability() {
+		return availability;
 	}
 }
