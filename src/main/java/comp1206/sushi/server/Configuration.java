@@ -5,7 +5,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,36 +21,46 @@ import comp1206.sushi.common.Ingredient;
 import comp1206.sushi.common.Order;
 import comp1206.sushi.common.Postcode;
 import comp1206.sushi.common.Restaurant;
+import comp1206.sushi.common.Staff;
 import comp1206.sushi.common.Supplier;
 import comp1206.sushi.common.User;
 
 public class Configuration {
 	
+	private Restaurant restaurant;
 	private String filename;
 	private Server server;
 	private Postcode restaurantPostcode;
 	private String restaurantName;
 	private ArrayList<User> users;
+	private List<Staff> staffs;
 	private CopyOnWriteArrayList<Dish> dishes;
+	private CopyOnWriteArrayList<Ingredient> ingredients;
 	private ArrayList<Drone> drones;
-	private ArrayList<Order> orders;
+	private List<Order> orders;
 	private DishStockManager dishStockManager;
 	private IngredientStockManager ingredientStockManager;
 	private Map<Dish, Number> configDishStock;
 	private Map<Ingredient, Number> configIngredientStock;
+	private DataPersistence dp;
+	private List<String> staffData = Collections.synchronizedList(new ArrayList<>());
+	private List<Integer> droneData = Collections.synchronizedList(new ArrayList<>());
 	
-	public Configuration(String filename, Server server, DishStockManager serverStockManager, IngredientStockManager serverIngredientManager) {
+	public Configuration(String filename, Server server) {
 		this.filename=filename;
 		this.server = server;	
+		this.server.clearAllData();
 		this.users = new ArrayList<>();
 		this.dishes = new CopyOnWriteArrayList<>();
-		this.orders = new ArrayList<>();
+		this.ingredients = new CopyOnWriteArrayList<>();
+		this.orders = server.getOrders();
 		this.drones = new ArrayList<>();
 		this.configDishStock = new ConcurrentHashMap<>();
 		this.configIngredientStock = new ConcurrentHashMap<>();
-		this.ingredientStockManager = serverIngredientManager;
-		this.dishStockManager = serverStockManager;
-		removeServerData();
+		this.ingredientStockManager = new IngredientStockManager();
+		this.dishStockManager = new DishStockManager();
+		this.dp = server.getDP();
+		this.staffs = new ArrayList<>();
 		
 		try {
 			readDataFromConfig();
@@ -56,17 +68,6 @@ public class Configuration {
 		catch(FileNotFoundException fnfe) {
 			fnfe.printStackTrace();
 		}
-	}
-	
-	public void removeServerData() {
-		server.getDishes().clear();
-		server.getDrones().clear();
-		server.getStaff().clear();
-		server.getIngredients().clear();
-		server.getSuppliers().clear();
-		server.getUsers().clear();
-		server.getOrders().clear();
-		server.getPostcodes().clear();
 	}
 	
 	public void readDataFromConfig() throws FileNotFoundException {
@@ -78,7 +79,10 @@ public class Configuration {
 				String[] data = line.split(":");
 				
 				if (line.contains("POSTCODE")) {
-					server.addPostcode(data[1]);
+					Postcode newPostcode = new Postcode(data[1]);
+					if (!server.getPostcodes().contains(newPostcode)) {
+						server.addPostcode(data[1]);
+					}
 				}
 				
 				else if (line.contains("RESTAURANT")) {
@@ -87,17 +91,22 @@ public class Configuration {
 					for (Postcode currentPostcode: server.getPostcodes()) {
 						if (currentPostcode.getName().equals(data[2])) {
 							restaurantPostcode = currentPostcode;
+							currentPostcode.setDistanceZero();
+							restaurant = new Restaurant(restaurantName, restaurantPostcode);
+							server.setRestaurantFromConfig(restaurant);
+							dp.writeRestaurant(restaurant);
 							break;
 						}
 					}
 					
 					if (restaurantPostcode == null) {
-						Postcode newPostcode = server.addPostcode(data[2]);
+						Postcode newPostcode = new Postcode(data[2]);
 						restaurantPostcode = newPostcode;
+						restaurant = new Restaurant(restaurantName, restaurantPostcode);
+						server.setRestaurantFromConfig(restaurant);
+						server.addPostcode(data[2]);
+						dp.writeRestaurant(restaurant);
 					}
-					
-					Restaurant restaurant = new Restaurant(restaurantName, restaurantPostcode);
-					server.setRestaurantFromConfig(restaurant);
 				}
 				
 				else if (line.contains("SUPPLIER")) {
@@ -112,11 +121,12 @@ public class Configuration {
 				else if (line.contains("INGREDIENT")) {
 					for (Supplier supplier: server.getSuppliers()) {
 						if (supplier.getName().equals(data[3])) {
-							if (validateNumeric(data[4]) && validateNumeric(data[5]) && validateNumeric(data[6])) {
+							if (valdateInt(data[4]) && valdateInt(data[5]) && valdateInt(data[6])) {
 								int restockThreshold = Integer.parseInt(data[4]);
 								int restockAmount = Integer.parseInt(data[5]);
 								int weight = Integer.parseInt(data[6]);
-								Ingredient ingredient = server.addIngredient(data[1], data[2], supplier, restockThreshold, restockAmount, weight);
+								Ingredient ingredient = new Ingredient (data[1], data[2], supplier, restockThreshold, restockAmount, weight);
+								ingredients.add(ingredient);
 								configIngredientStock.put(ingredient, (int)0);
 								break;
 							}
@@ -131,13 +141,12 @@ public class Configuration {
 					String[] recipe = data[6].split(",");
 					Map<Ingredient, Number> dishRecipe = new HashMap<>();
 					Dish dishToAdd = new Dish(data[1], data[2], price, restockThreshold, restockAmount);
-					dishes.add(dishToAdd);
-					configDishStock.put(dishToAdd, (int)0);
+					dishToAdd.addUpdateListener(server);
 					for (String current: recipe) {
 						String[] ingredientQttyPair = current.split(" \\* ");
 						int quantity = Integer.parseInt(ingredientQttyPair[0]);
 						
-						for (Ingredient currentIngredient: server.getIngredients()) {
+						for (Ingredient currentIngredient: this.ingredients) {
 							if (currentIngredient.getName().equals(ingredientQttyPair[1])) {
 								dishRecipe.put(currentIngredient, quantity);
 								break;
@@ -145,6 +154,8 @@ public class Configuration {
 						}
 					}
 					dishToAdd.setRecipe(dishRecipe);
+					dishes.add(dishToAdd);
+					configDishStock.put(dishToAdd, (int)0);
 				}
 				
 				else if (line.contains("USER")) {
@@ -191,7 +202,7 @@ public class Configuration {
 				else if (line.contains("STOCK")) {
 					for (Dish dish: dishes) {
 						if (dish.getName().equals(data[1])) {
-							if (validateNumeric(data[2])) {
+							if (valdateInt(data[2])) {
 								int dishStock = Integer.parseInt(data[2]);
 								configDishStock.put(dish, dishStock);
 								break;
@@ -199,9 +210,9 @@ public class Configuration {
 						}
 					}
 					
-					for (Ingredient ingredient: server.getIngredients()) {
+					for (Ingredient ingredient: this.ingredients) {
 						if (ingredient.getName().equals(data[1])) {
-							if (validateNumeric(data[2])) {
+							if (valdateInt(data[2])) {
 								int ingredientStock = Integer.parseInt(data[2]);
 								configIngredientStock.put(ingredient, (int)ingredientStock);
 								break;
@@ -211,33 +222,56 @@ public class Configuration {
 				}
 				
 				else if (line.contains("STAFF")) {
-					server.addStaff(data[1]);
+					Staff newStaff = new Staff(data[1], server);
+					staffs.add(newStaff);
+					staffData.add(data[1]);
 				}
 				
 				else if (line.contains("DRONE")) {
-					if (validateNumeric(data[1]) == true) {
-						float droneSpeed = Float.parseFloat(data[1]);
-						drones.add(new Drone(droneSpeed));
+					if (validateDroneSpeed(data[1]) == true) {
+						int droneSpeed = Integer.parseInt(data[1]);
+						Drone newDrone = new Drone(droneSpeed);
+						drones.add(newDrone);
+						droneData.add(droneSpeed);
 					}
 				}
 			}
 			
-			ingredientStockManager.initializeStockFromConfig(configIngredientStock);
-			dishStockManager.initializeStockFromConfig(configDishStock);
-			server.setDishesFromConfig(dishes);
+			ingredientStockManager.initializeIngredientStock(configIngredientStock);
+			dishStockManager.initializeDishStock(configDishStock);
+			server.setIngredientManager(ingredientStockManager);
+			server.setDishManager(dishStockManager);
+			dp.writeDishManager(dishStockManager);
+			dp.writeIngredientManager(ingredientStockManager);
+			dp.writeOrders(orders);
+			dp.writeDrones(droneData);
+			dp.writeStaffs(staffData);
+			server.setStaffsFromConfig(staffs);
+			server.setDroneData(droneData);
+			server.setStaffData(staffData);
 			server.setDronesFromConfig(drones);
-			server.setOrders(this.orders);
+			server.setOrders();
+			bf.close();
 		}
 		catch(IOException e) {
 			e.printStackTrace();
 		}
 	}
-	public boolean validateNumeric(String value) {
+	public boolean valdateInt(String value) {
 		if (StringUtils.isNumeric(value)) {
 			return true;
 		}
 		else {
 			return false;
 		}
+	}
+	
+	public boolean validateDroneSpeed(String value) {
+		try {
+			Double.parseDouble(value);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
 	}
 }

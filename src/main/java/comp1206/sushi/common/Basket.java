@@ -31,14 +31,14 @@ public class Basket implements Serializable{
 		if ( (Integer) quantity == 0) {
 			basketMap.remove(dish);
 			for(Entry<Dish, Number> item: basketMap.entrySet()) {
-				cost += (Float) item.getKey().getPrice() * (Integer) item.getValue();
+				cost += (int) item.getKey().getPrice() * (Integer) item.getValue();
 			}			
 		} 
 		
 		else {
 			basketMap.put(dish, quantity);
 			for(Entry<Dish, Number> item: basketMap.entrySet()) {
-				cost += (Float) item.getKey().getPrice() * (Integer) item.getValue();
+				cost += (int) item.getKey().getPrice() * (int) item.getValue();
 			}
 		}
 		setCost(cost);

@@ -15,7 +15,6 @@ public class Dish extends Model implements Serializable{
 	private Map <Ingredient,Number> recipe;
 	private String name;
 	private String description;
-	private String restockType;
 	private Number price;
 	private Number restockThreshold;
 	private Number restockAmount;
@@ -27,8 +26,25 @@ public class Dish extends Model implements Serializable{
 		this.restockThreshold = restockThreshold;
 		this.restockAmount = restockAmount;
 		this.recipe = new HashMap<Ingredient,Number>();
-		this.beingRestocked = false;
-		this.restockType = "Normal";
+	}
+	
+	public void addIngredientToRecipe(Ingredient ingredient, Number quantity) {
+		Map<Ingredient, Number> oldRecipe = new HashMap<>();
+		oldRecipe.putAll(getRecipe());
+		if (quantity.intValue() == 0) {
+			recipe.remove(ingredient);
+		}
+		else {
+			recipe.put(ingredient, quantity);
+		}
+		this.notifyUpdate("Recipe", oldRecipe.toString(), this.recipe.toString());
+	}
+	
+	public void removeIngredientFromRecipe(Ingredient ingredient) {
+		Map<Ingredient, Number> oldRecipe = new HashMap<>();
+		oldRecipe.putAll(getRecipe());
+		recipe.remove(ingredient);
+		this.notifyUpdate("Recipe", oldRecipe.toString(), this.recipe.toString());
 	}
 	
 	public void setAvailability(boolean availability) {
@@ -39,20 +55,12 @@ public class Dish extends Model implements Serializable{
 		return this.availability;
 	}
 	
-	public void setRestockStatus(boolean status) {
+	public synchronized void setRestockStatus(boolean status) {
 		beingRestocked = status;
 	}
 	
 	public boolean beingRestocked() {
 		return beingRestocked;
-	}
-	
-	public void setRestockType(String type) {
-		this.restockType = type;
-	}
-	
-	public String getRestockType() {
-		return this.restockType;
 	}
 	
 	public String getName() {
@@ -87,7 +95,7 @@ public class Dish extends Model implements Serializable{
 	}
 
 	public void setRecipe(Map <Ingredient,Number> recipe) {
-		this.notifyUpdate("Recipe", this.recipe, recipe);
+		this.notifyUpdate("Recipe", this.recipe.toString(), recipe.toString());
 		this.recipe = recipe;
 	}
 
@@ -108,4 +116,23 @@ public class Dish extends Model implements Serializable{
 	public Number getRestockAmount() {
 		return this.restockAmount;
 	}	
+	
+	public boolean equals(Object o) {
+	    if (o == this) {
+	      return true;
+	    }
+	    if (!(o instanceof Dish)) {
+	      return false;
+	    }
+	    Dish orderInstance = (Dish)o;
+	    return orderInstance.name.equals(name) &&
+	    		orderInstance.description.equals(description);
+	}
+	 
+	  public int hashCode() {
+	    int result = 17;
+	    result = 31 * result + name.hashCode();
+	    result = 31 * result + description.hashCode();
+	    return result;
+	}
 }

@@ -23,6 +23,10 @@ public class User extends Model implements Serializable{
 		this.orders = new ArrayList<>();
 	}
 	
+	public String getAddress() {
+		return address;
+	}
+	
 	public String getName() {
 		return name;
 	}
@@ -68,4 +72,23 @@ public class User extends Model implements Serializable{
 	public String getPassword() {
 		return password;
 	}
+	
+	public boolean equals(Object o) {
+	    if (o == this) {
+	      return true;
+	    }
+	    if (!(o instanceof User)) {
+	      return false;
+	    }
+	    User userInstance = (User)o;
+	    return userInstance.name.equals(name) &&
+	    		userInstance.password.equals(password);
+	  }
+	 
+	  public int hashCode() {
+	    int result = 17;
+	    result = 31 * result + name.hashCode();
+	    result = 31 * result + password.hashCode();
+	    return result;
+	  }
 }

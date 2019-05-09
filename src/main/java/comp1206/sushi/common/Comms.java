@@ -28,7 +28,7 @@ public class Comms{
 			input = new ObjectInputStream(this.socket.getInputStream());
 		}
 		catch(IOException e) {
-			System.out.println("Something went wrong");
+			return;
 		}	
 	}
 	
@@ -51,8 +51,8 @@ public class Comms{
 	
 	public void sendMessage(Object object) throws IOException {
 		output.writeObject(object);
-		output.flush();
 		output.reset();
+		output.flush();
 	}
 	
 	public Object receiveMessage(ServerMailBox serverMails, Server server) {
@@ -63,7 +63,6 @@ public class Comms{
 		catch(IOException e) {
 			try {
 				logger.info("Lost connection to client " + clientIP);
-				System.out.println("Loss connection to client " + clientIP);
 				socket.close();
 				output.close();
 				input.close();
@@ -71,11 +70,11 @@ public class Comms{
 				server.removeMailBoxes(serverMails);
 			}
 			catch(IOException e2) {
-				e.printStackTrace();
+				return null;
 			}   
 		}
 		catch(ClassNotFoundException cnfe) {
-			cnfe.printStackTrace();
+			return null;
 		}
 		return objectReceived;
 	}
@@ -88,17 +87,16 @@ public class Comms{
 		catch(IOException e) {
 			try {
 				logger.info("Lost connection to server");
-				System.out.println("Lost connection to server");
 				socket.close();
 				output.close();
 				input.close();
 			}
 			catch(IOException e2) {
-				e.printStackTrace();
+				return null;
 			}
 		}
 		catch(ClassNotFoundException cnfe) {
-			cnfe.printStackTrace();
+			return null;
 		}
 		return objectReceived;
 	}

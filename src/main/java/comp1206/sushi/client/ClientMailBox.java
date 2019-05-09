@@ -66,7 +66,10 @@ public class ClientMailBox implements Runnable{
 			}
 			else {
 				if (objectReceived instanceof User) {
-					client.setRegisteredUser((User) objectReceived);
+					User registeredUser = (User) objectReceived;
+					client.setRegisteredUser(registeredUser);
+					client.setOrderList(registeredUser.getOrders());
+					this.setRegisteredUser(registeredUser);
 				}
 				
 				if (objectReceived instanceof ArrayList<?>) {

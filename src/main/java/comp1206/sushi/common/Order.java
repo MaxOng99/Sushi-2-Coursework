@@ -23,8 +23,9 @@ public class Order extends Model implements Serializable {
 		this.user = user;
 		this.basket = this.user.getBasket();
 		this.cost = this.basket.getCost();
+		this.status = "Incomplete";
 	}
-
+	
 	public Number getDistance() {
 		return user.getDistance();
 	}
@@ -53,5 +54,28 @@ public class Order extends Model implements Serializable {
 	
 	public Basket getBasket() {
 		return basket;
+	}
+	
+	public boolean equals(Object o) {
+	    if (o == this) {
+	      return true;
+	    }
+	    if (!(o instanceof Order)) {
+	      return false;
+	    }
+	    Order orderInstance = (Order)o;
+	    return orderInstance.name.equals(name) &&
+	    		orderInstance.user.equals(user) &&
+	    		(int)orderInstance.getCost() == (int)cost &&
+	    		orderInstance.getBasket().getBasketMap().equals(basket.getBasketMap());
+	}
+	 
+	  public int hashCode() {
+	    int result = 17;
+	    result = 31 * result + name.hashCode();
+	    result = 31 * result + user.hashCode();
+	    result = 31 * result + (int)cost;
+	    result = 31 * result + basket.getBasketMap().hashCode();
+	    return result;
 	}
 }

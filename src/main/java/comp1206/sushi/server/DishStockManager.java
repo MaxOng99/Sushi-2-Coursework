@@ -1,75 +1,86 @@
 package comp1206.sushi.server;
 
+import java.io.Serializable;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import comp1206.sushi.common.Dish;
-import comp1206.sushi.common.Ingredient;
 
+public class DishStockManager implements Serializable{
 
-public class DishStockManager {
-	
-	private Server server;
-	private IngredientStockManager ingredientManager;
+	private static final long serialVersionUID = 2541673786741240083L;
 	private Map<Dish, Number> dishStock;
+	private List<Dish> dishes;
 	private BlockingQueue<Dish> dishRestockQueue;
-	private BlockingQueue<Dish> lackIngredientList;
-	private Thread checkAbleToRestock;
-	private Object dishLock = new Object();
+
 	
-	public DishStockManager(IngredientStockManager serverIngredientManager, Server server) {
-		this.server = server;
-		ingredientManager = serverIngredientManager;
+	public DishStockManager() {
 		dishRestockQueue = new LinkedBlockingQueue<>();
-		lackIngredientList = new LinkedBlockingQueue<>();
-		checkAbleToRestock = new Thread(new CheckAbleToRestock());
-		checkAbleToRestock.start();
+		dishes = Collections.synchronizedList(new ArrayList<>());
+		dishStock = new ConcurrentHashMap<>();
 	}
 	
 	public void clearAllData() {
 		dishStock.clear();
 		dishRestockQueue.clear();
-		lackIngredientList.clear();
+		dishes.clear();
 	}
 	
-	public void addDishToStockManager(Dish dish, Number quantity) {
-		dishStock.put(dish, quantity);
-	}
-	
-	public void removeDishFromStockManager(Dish dish) {
-		dishStock.remove(dish);
-	}
-	
-	public void initializeStockFromConfig(Map<Dish, Number> configStock) {
-		dishStock = configStock;
-		
+	public void initialRestockProcess() {
 		for (Entry<Dish, Number> currentEntry: dishStock.entrySet()) {
 			Dish currentDish = currentEntry.getKey();
-			int currentDishStock = (int) currentEntry.getValue();
-			int restockThreshold = (int) currentDish.getRestockThreshold();
-			if (currentDishStock < restockThreshold) {
-				if (ableToRestock(currentDish) == true) {
-					try {
-						currentDish.setRestockStatus(true);
-						dishRestockQueue.put(currentDish);
-						System.out.println("Added " + currentDish + " to Restocking Queue");
-					}
+			
+			if (currentDish.beingRestocked() == true) {
+				try {
+					dishRestockQueue.put(currentDish);
 					
-					catch(InterruptedException e) {
-						e.printStackTrace();
-					}
 				}
-				else {
+				catch(InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			
+			else {
+				int currentDishQuantity = (int)currentEntry.getValue();
+				if (shouldRestock(currentDish, currentDishQuantity)) {
 					try {
-						lackIngredientList.put(currentDish);
-					} catch (InterruptedException e) {
+						dishRestockQueue.put(currentDish);
+					}
+					catch(InterruptedException e) {
 						e.printStackTrace();
 					}
 				}
 			}
 		}
+	}
+	
+	public void initializeDishStock(Map<Dish, Number> configStock) {
+		dishStock = configStock;
+		dishes.addAll(dishStock.keySet());
+		initialRestockProcess();
+		
+	}
+	
+	public List<Dish> getDishes() {
+		return dishes;
+	}
+	
+	public void addDish(Dish dish, Number quantity) {
+		dishes.add(dish);
+		dishStock.put(dish, quantity);
+		setStock(dish, quantity);
+	}
+	
+	public void removeDish(Dish dish) {
+		dishes.remove(dish);
+		dishStock.remove(dish);
 	}
 	
 	public int getStock(Dish dish) {
@@ -84,55 +95,8 @@ public class DishStockManager {
 		return dishRestockQueue;
 	}
 	
-	public boolean ableToRestock(Dish dish) {
-		
-		Map<Ingredient, Number> recipe = dish.getRecipe();
-		boolean ableToRestock = true;
-		for (Entry<Ingredient, Number> currentEntry: recipe.entrySet()) {
-			Ingredient currentIngredient = currentEntry.getKey();
-			int quantityNeeded = (int)currentEntry.getValue();
-			if ((int)ingredientManager.getStock(currentIngredient) < (int)dish.getRestockAmount()*quantityNeeded) {
-				if (currentIngredient.beingRestocked() == false) {
-					ingredientManager.requestRestock(currentIngredient);
-				}
-				ableToRestock = false;
-			}
-		}
-		return ableToRestock;
-	}
-	
-	public void requireExtraStock(Dish dish) {
-		try {
-			if (ableToRestock(dish) == false) {
-				System.out.println("Not enough ingredients");
-				try {
-					lackIngredientList.put(dish);
-				}
-				catch(InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-			else {
-				if (dishRestockQueue.contains(dish)) {
-					System.out.println(dish + " is already added to restock queue");
-				}
-				
-				else if (dish.beingRestocked() == true) {
-					System.out.println(dish + " is being restocked");
-				}
-				else {
-					dishRestockQueue.put(dish);
-					System.out.println("Added " + dish +" to restock queue");
-					dish.setRestockStatus(true);
-				}
-			} 
-		}catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-	}
-	
 	public void setStock(Dish dish, Number quantity){	
-		synchronized(dishLock) {
+		synchronized(this) {
 			int dishQuantity = (int) dishStock.get(dish);
 			int newDishQuantity = dishQuantity + (int) quantity;
 			
@@ -143,49 +107,39 @@ public class DishStockManager {
 				dishStock.replace(dish, newDishQuantity);
 			}
 			
-			if (newDishQuantity < (int) dish.getRestockThreshold()) {
+			if (shouldRestock(dish, newDishQuantity)) {
 				try {
-					if (ableToRestock(dish) == false) {
-						System.out.println("Not enough ingredients");
-						lackIngredientList.put(dish);
-					}
-					else {
-						if (dishRestockQueue.contains(dish) || dish.beingRestocked() == true) {
-							System.out.println(dish + " is already added to restock queue");
-						}
-						else {
-							dishRestockQueue.put(dish);
-							dish.setRestockStatus(true);
-						}
-					}
-				} catch (InterruptedException e) {
+					dishRestockQueue.put(dish);
+				}
+				catch(InterruptedException e) {
 					e.printStackTrace();
 				}
 			}
 		}
 	}
 	
-	public BlockingQueue<Dish> getLackIngredientList() {
-		return lackIngredientList;
+	public void directRestock(Dish dish, int amountToRestock) {
+		dishStock.replace(dish, amountToRestock);
 	}
 	
-	class CheckAbleToRestock implements Runnable {
-
-		@Override
-		public void run() {
-			while(true) {
-				try {
-					Dish dish = lackIngredientList.take();
-					if (ableToRestock(dish)) {
-						dishRestockQueue.put(dish);
-					}
-					else {
-						lackIngredientList.put(dish);
-					}
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+	public boolean shouldRestock(Dish dish, int currentQuantity) {
+		
+		if (currentQuantity < (int)dish.getRestockThreshold()) {
+			if (dishRestockQueue.contains(dish)) {
+				return false;
+			} 
+			
+			else if (dish.beingRestocked() == true){
+				return false;
+			}
+			else {
+				return true;
 			}
 		}
+		else {
+			return false;
+		}
 	}
+	
+	
 }

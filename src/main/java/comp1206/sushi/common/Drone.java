@@ -1,29 +1,31 @@
 package comp1206.sushi.common;
 
+import java.io.Serializable;
+
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import comp1206.sushi.server.IngredientStockManager;
+import comp1206.sushi.server.Server;
 
-public class Drone extends Model implements Runnable{
+public class Drone extends Model implements Runnable, Serializable{
 	
+	private static final long serialVersionUID = -333372487038185433L;
 	private volatile Number progress;
 	private Number speed;
 	private Number capacity;
 	private Number battery;
-	private volatile float distanceTravelled;
 	private volatile Postcode source;
 	private volatile Postcode destination;
 	private Postcode restaurantPostcode;
-	private boolean removedFromServer;
+	private volatile boolean removedFromServer;
 	private volatile boolean restockStatus; 
 	private volatile String status;
 	private IngredientStockManager ingredientManager;
 	private BlockingQueue<Order> orderQueue;
 	private BlockingQueue<Ingredient> ingredientQueue;
 	private Thread droneThread;
+	private Server server;
 	
 	public Drone(Number speed) {
 		this.speed = speed;
@@ -32,14 +34,17 @@ public class Drone extends Model implements Runnable{
 		this.status = "Idle";
 		this.progress = null;
 		this.droneThread = new Thread(this);
-		this.distanceTravelled = 0;
+		droneThread.setName(getName());
 		this.removedFromServer = false;
 		this.restockStatus = true;
 	}
 	
+	public void setServer(Server server) {
+		this.server = server;
+	}
+	
 	public void setRestaurantPostcode(Postcode restaurantPostcode) {
 		this.restaurantPostcode = restaurantPostcode;
-		this.setSource(restaurantPostcode);
 		droneThread.start();
 	}
 	
@@ -125,6 +130,7 @@ public class Drone extends Model implements Runnable{
 	}
 	
 	public void deleteFromServer() {
+		droneThread.interrupt();
 		removedFromServer = true;
 	}
 	
@@ -142,7 +148,7 @@ public class Drone extends Model implements Runnable{
 					deliverOrder();
 				}
 				catch(InterruptedException e) {
-					e.printStackTrace();
+					return;
 				}
 			}
 			else {
@@ -152,9 +158,9 @@ public class Drone extends Model implements Runnable{
 	}
 	
 	public void restockIngredient() throws InterruptedException{
-		if (this.getStatus().equals("Idle")){
+		
 			Ingredient ingredientTaken = null;
-			ingredientTaken = ingredientQueue.poll(1, TimeUnit.MILLISECONDS);
+			ingredientTaken = ingredientQueue.poll(1, TimeUnit.SECONDS);
 			
 			if (ingredientTaken == null) {
 				return;
@@ -162,16 +168,14 @@ public class Drone extends Model implements Runnable{
 			else {
 				performRestockProcess(ingredientTaken);
 			}
-		}
-		else {
-			return;
-		}
+		
+		
 	}
 	
 	public void deliverOrder() throws InterruptedException{
 		if (getStatus().equals("Idle")) {
 			Order order = null;
-			order = orderQueue.poll(1, TimeUnit.MILLISECONDS);
+			order = orderQueue.poll(1, TimeUnit.SECONDS);
 		
 			if (order == null) {
 				return;
@@ -186,29 +190,54 @@ public class Drone extends Model implements Runnable{
 		if (restaurantPostcode.getName().equals(order.getUser().getPostcode().getName())) {
 			order.setStatus("Complete");
 			this.setStatus("Idle");
+			server.getDP().writeOrders(server.getOrders());
 		}
 		
 		else {
 			this.setSource(restaurantPostcode);
 			this.setDestination(order.getUser().getPostcode());
+			float distanceTravelled = 0;
 			double totalDistance = (double) this.getDestination().getDistance();
-			double timeTaken = totalDistance / (Float) this.getSpeed();
-			ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);     
-	        scheduler.scheduleAtFixedRate(() -> this.outBoundProgress(scheduler, totalDistance), 0, 1, TimeUnit.SECONDS);
-			this.setStatus("Delivering Order...");
-			try {
-				Thread.sleep((long) (timeTaken * 1000));
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			order.setStatus("Complete");
+	        this.setStatus("Delivering Order...");
+	        while (distanceTravelled < totalDistance) {
+	        	this.setProgress(Math.round((distanceTravelled*100)/totalDistance));
+				distanceTravelled += this.getSpeed().intValue();
+				try {
+					Thread.sleep(1000);
+				}
+				catch(InterruptedException e) {
+					return;
+				}
+	        }
+	        
+	        this.setProgress(100);
+			this.setStatus("Returning To Restaurant");
+			this.setSource(this.getDestination());
+			this.setDestination(restaurantPostcode);
+	        distanceTravelled = 0;
+	        order.setStatus("Complete");
+			server.getDP().writeOrders(server.getOrders());
+			
+	        while (distanceTravelled < totalDistance) {
+	        	this.setProgress(Math.round((distanceTravelled*100)/totalDistance));
+				distanceTravelled += this.getSpeed().intValue();
+				try {
+					Thread.sleep(1000);
+				}
+				catch(InterruptedException e) {
+					return;
+				}
+	        }
+	        
+			this.setProgress(null);
 			this.setSource(null);
 			this.setDestination(null);
-		}
-	}
+			this.setStatus("Idle");
+	    }
+		
+	}	
 	
 	public void performRestockProcess(Ingredient ingredientTaken) {
-		ingredientTaken.setRestockStatus(true);
 		ingredientTaken.setIngredientAvailability(false);
 		int currentStockValue = (int)ingredientManager.getStock(ingredientTaken);
 		int restockThreshold = (int) ingredientTaken.getRestockThreshold();
@@ -216,81 +245,52 @@ public class Drone extends Model implements Runnable{
 		this.setSource(restaurantPostcode);
 		this.setDestination(ingredientTaken.getSupplier().getPostcode());
 		double totalDistance = (double) this.getDestination().getDistance();
-		double timeTaken = totalDistance / (Float) this.getSpeed();
+		float distanceTravelled = 0;
 		this.setStatus("Fetching " + ingredientTaken + "...");
-		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-		if (ingredientTaken.getRestockType().equals("Normal")) {
-			while (currentStockValue < restockThreshold) {   
-		        scheduler.scheduleAtFixedRate(() -> this.outBoundProgress(scheduler, totalDistance), 0, 1, TimeUnit.SECONDS);
-		        try {
-		        	Thread.sleep((long) (timeTaken * 1000 * 2));
-		        }
-		        catch(InterruptedException e) {
-		        	e.printStackTrace();
-		        }
-		        ingredientManager.directRestock(ingredientTaken, currentStockValue + restockAmount);
-		        currentStockValue += restockAmount;
-			}
-			ingredientTaken.setIngredientAvailability(true);
-			ingredientTaken.setRestockStatus(false);
-			this.setStatus("Idle");
-		}
-		else if (ingredientTaken.getRestockType().equals("Extra")) {  
-	        scheduler.scheduleAtFixedRate(() -> this.outBoundProgress(scheduler, totalDistance), 0, 1, TimeUnit.SECONDS);
-	        try {
-	        	Thread.sleep((long) (timeTaken * 1000 * 2));
-	        }
-	        catch(InterruptedException e) {
-	        	e.printStackTrace();
-	        }
-	        ingredientManager.directRestock(ingredientTaken, (int)ingredientManager.getStock(ingredientTaken) + restockAmount);
-	        ingredientTaken.setRestockStatus(false);
-	        ingredientTaken.setRestockType("Normal");
-	        ingredientTaken.setIngredientAvailability(true);
-	        this.setStatus("Idle");
-		}
-	}
-	
-	public void inBoundProgress(ScheduledExecutorService scheduler, double totalDistance) {
-		if (distanceTravelled < totalDistance){
-			distanceTravelled = distanceTravelled + (float) this.getSpeed();
-			if (distanceTravelled >= totalDistance) {
-				this.setStatus("Idle");
-				this.setProgress(100);
-				try {
-					Thread.sleep(500);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-				this.setProgress(null);
-				this.setSource(null);
-				this.setDestination(null);
-				this.distanceTravelled = 0;
-				scheduler.shutdown();
-			}
-			else {
+		while (currentStockValue < restockThreshold) {   
+	       
+			while (distanceTravelled < totalDistance) {
 				this.setProgress(Math.round((distanceTravelled*100)/totalDistance));
-			}	
-		}		
-	}
-	
-	public void outBoundProgress(ScheduledExecutorService scheduler, double totalDistance) {
-		if (distanceTravelled < totalDistance) {
-			distanceTravelled = distanceTravelled + (float) this.getSpeed();
-			if (distanceTravelled >= totalDistance) {
-				this.setProgress(100);
-				this.setStatus("Returning To Restaurant");
-				this.setSource(this.getDestination());
-				this.setDestination(restaurantPostcode);
-				this.distanceTravelled = 0;
-				scheduler.shutdown();
-				ScheduledExecutorService inBoundScheduler = Executors.newScheduledThreadPool(1);     
-		        inBoundScheduler.scheduleAtFixedRate(() -> this.inBoundProgress(inBoundScheduler, totalDistance), 0, 1, TimeUnit.SECONDS);
+				distanceTravelled += this.getSpeed().intValue();
+				try {
+					Thread.sleep(1000);
+				}
+				catch(InterruptedException e) {
+					return;
+				}
 			}
 			
-			else {
-				this.setProgress(Math.round((distanceTravelled*100)/totalDistance));
-			}	
+			this.setProgress(100);
+			this.setStatus("Returning To Restaurant");
+			this.setSource(this.getDestination());
+			this.setDestination(restaurantPostcode);
+			
+			distanceTravelled = 0;
+	        
+	        while (distanceTravelled < totalDistance) {
+	        	this.setProgress(Math.round((distanceTravelled*100)/totalDistance));
+				distanceTravelled += this.getSpeed().intValue();
+				try {
+					Thread.sleep(1000);
+				}
+				catch(InterruptedException e) {
+					return;
+				}
+			}
+	        
+	        this.setProgress(100);
+			this.setProgress(null);
+			this.setSource(null);
+			this.setDestination(null);
+			this.setStatus("Idle");
+			
+	        ingredientManager.directRestock(ingredientTaken, currentStockValue + restockAmount);
+	        currentStockValue += restockAmount;
+	        server.getDP().writeIngredientManager(ingredientManager);
 		}
+		
+		ingredientTaken.setIngredientAvailability(true);
+		ingredientTaken.setRestockStatus(false);
+		this.setStatus("Idle");
 	}
 }

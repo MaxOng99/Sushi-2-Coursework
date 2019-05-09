@@ -1,19 +1,17 @@
 package comp1206.sushi.client;
 
 import java.io.IOException;
+
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import comp1206.sushi.common.Basket;
-
-//import org.apache.logging.log4j.LogManager;
-//import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Order;
@@ -26,9 +24,10 @@ import comp1206.sushi.common.User;
 public class Client implements ClientInterface {
 
     private static final Logger logger = LogManager.getLogger("Client");
+ 
     
     public Restaurant restaurant;
-    public ArrayList<Order> orders;
+    public List<Order> orders;
 	public List<Dish> dishes = new ArrayList<Dish>();
 	public ArrayList<Postcode> postcodes = new ArrayList<Postcode>();
 	private ArrayList<UpdateListener> listeners = new ArrayList<UpdateListener>();
@@ -54,8 +53,7 @@ public class Client implements ClientInterface {
 			connectToServer();
 		}
 		catch(Exception e) {
-			System.out.println("Terminating program...");
-			System.out.println(e.getMessage());
+			logger.info("Terminating program...");
 			System.exit(1);
 		}
 	}
@@ -68,10 +66,13 @@ public class Client implements ClientInterface {
 		}
 	}
 	
+	public void setOrderList(List<Order> order) {
+		this.orders = order;
+	}
 	public void connectToServer() throws Exception{
 		logger.info("Connecting to server...");
 		Socket clientSock = new Socket("127.0.0.1", 49920);
-		System.out.println("Connected to server");
+		logger.info("Connected to server");
 		mailBox = new ClientMailBox(this, clientSock, logger);
 		Thread msgManagerThread = new Thread(mailBox);
 		msgManagerThread.start();
@@ -178,7 +179,6 @@ public class Client implements ClientInterface {
 
 	@Override
 	public Order checkoutBasket(User user) {
-		Basket userBasket = user.getBasket();
 		Order newOrder = new Order(user);
 		newOrder.setStatus("Incomplete");
 		user.addNewOrder(newOrder);

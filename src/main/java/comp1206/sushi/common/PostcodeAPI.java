@@ -55,7 +55,6 @@ public class PostcodeAPI {
 			jsonResponse = response.toString();
 		}
 		else {
-			System.err.println(responseCode);
 			throw new IOException("Error connecting the web API");
 		}
 	}

@@ -14,6 +14,7 @@ public class Supplier extends Model implements Serializable{
 	public Supplier(String name, Postcode postcode) {
 		this.name = name;
 		this.postcode = postcode;
+		this.distance = this.postcode.getDistance();
 	}
 
 	public String getName() {
@@ -35,7 +36,7 @@ public class Supplier extends Model implements Serializable{
 	}
 
 	public Number getDistance() {
-		return postcode.getDistance();
+		return distance;
 	}
 
 }

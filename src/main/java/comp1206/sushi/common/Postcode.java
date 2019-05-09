@@ -35,6 +35,9 @@ public class Postcode extends Model implements Serializable{
 		return this.latLong;
 	}
 	
+	public void setDistanceZero() {
+		distance = 0;
+	}
 	/**
 	 * @author David George, Neeme Praks (https://stackoverflow.com/questions/3694380)
 	 * Calculates the distance between two points on the surface of Earth based on Haversine formula 
@@ -84,5 +87,22 @@ public class Postcode extends Model implements Serializable{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public boolean equals(Object o) {
+	    if (o == this) {
+	      return true;
+	    }
+	    if (!(o instanceof Postcode)) {
+	      return false;
+	    }
+	    Postcode postcodeInstance = (Postcode)o;
+	    return postcodeInstance.name.equals(name);
+	}
+	 
+	  public int hashCode() {
+	    int result = 17;
+	    result = 31 * result + name.hashCode();
+	    return result;
 	}
 }

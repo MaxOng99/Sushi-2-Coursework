@@ -1,16 +1,17 @@
 package comp1206.sushi.server;
 
 import java.io.IOException;
+
+
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.logging.log4j.Logger;
 
-import comp1206.sushi.common.Basket;
 import comp1206.sushi.common.Comms;
 import comp1206.sushi.common.Dish;
 import comp1206.sushi.common.Order;
@@ -22,27 +23,39 @@ public class ServerMailBox implements Runnable{
 	private Comms serverSideComm;
 	private InetAddress clientIP;
 	private User registeredUser;
-	private List<Order> orders;
+	private List<Order> userOrders;
+	private List<Order> serverOrders;
 	
 	public ServerMailBox(Server server, Socket socket, InetAddress clientIP, Logger logger) {
 		this.server = server;
 		this.serverSideComm = new Comms(socket, clientIP, logger);
 		this.clientIP = clientIP;
-		this.orders = new CopyOnWriteArrayList<>();
+		this.userOrders = Collections.synchronizedList(new ArrayList<>());
+		this.serverOrders = server.getOrders();
 	}
 	
 	private void verifyCredentials(String credentials) throws IOException{
 		String[] credential = credentials.split(":");
 		User userToVerify = null;
-		for (User user: server.getUsers()) {
-			if (credential[0].equals(user.getUsername()) && credential[1].equals(user.getPassword())) {
-				userToVerify = user;
-				serverSideComm.sendMessage(user);
-				break;
+		
+		synchronized(server.getUsers()) {
+			for (User user: server.getUsers()) {
+				if (credential[0].equals(user.getUsername()) && credential[1].equals(user.getPassword())) {
+					userToVerify = user;
+					
+					for (Order order: server.getOrders()) {
+						if (order.getUser().equals(userToVerify)) {
+							userToVerify.addNewOrder(order);
+						}
+					}
+					
+					serverSideComm.sendMessage(userToVerify);
+					break;
+				}
 			}
-		}
-		if (userToVerify == null) {
-			serverSideComm.sendMessage("Verification Failed");
+			if (userToVerify == null) {
+				serverSideComm.sendMessage("Verification Failed");
+			}
 		}
 	}
 	
@@ -67,26 +80,19 @@ public class ServerMailBox implements Runnable{
 	}
 	
 	private void addNewOrder(Order order) {
-		User userOfNewOrder = order.getUser();
-		String username = userOfNewOrder.getName();
-		String password = userOfNewOrder.getPassword();
-		for (User user: server.getUsers()) {
-			if (user.getName().equals(username) && user.getPassword().equals(password)) {
-				Basket basket = order.getBasket();
-				user.updateBasket(basket);
-				user.addNewOrder(order);
-				server.addOrder(order);
-				this.orders.add(order);
-				break;   
-			}
-		}
+		server.addOrder(order);
+		userOrders.add(order);
 	}
 	
 	private void cancelOrder(Order order) {
-		for (Order current: server.getOrders()) {
-			if(current.getName().equals(order.getName())) {
-				current.setStatus("Canceled");
-				break;
+		synchronized(serverOrders) {
+			Iterator<Order> orderIt = serverOrders.iterator();
+			while(orderIt.hasNext()) {
+				Order currentOrder = orderIt.next();
+				if (currentOrder.equals(order)) {
+					currentOrder.setStatus("Canceled");
+					break;
+				}
 			}
 		}
 	}
@@ -103,7 +109,7 @@ public class ServerMailBox implements Runnable{
 			informCompleteOrderThread.start();
 		}
 		catch(IOException e) {
-			e.printStackTrace();
+			return;
 		}
 		
 		while (true) {
@@ -150,22 +156,24 @@ public class ServerMailBox implements Runnable{
 		public void run() {
 			List<Order> ordersToRemove = new ArrayList<>();
 			while(true) {
-				if (!ServerMailBox.this.orders.isEmpty()) {
-					Iterator<Order> orderIt = orders.iterator();
-					while(orderIt.hasNext()) {
-						Order order = orderIt.next();
-						if (server.isOrderComplete(order)) {
-							try {
-								ordersToRemove.add(order);
-								serverSideComm.sendMessage(order);
-								System.out.println("Completed Order message sent");
-							}
-							catch(IOException e1) {
-								e1.printStackTrace();
+				if (!userOrders.isEmpty()) {
+					synchronized (userOrders) {
+						Iterator<Order> orderIt = userOrders.iterator();
+						while(orderIt.hasNext()) {
+							Order order = orderIt.next();
+							if (server.isOrderComplete(order)) {
+								try {
+									ordersToRemove.add(order);
+									serverSideComm.sendMessage(order);
+								}
+								catch(IOException e) {
+									return;
+								}
 							}
 						}
+						userOrders.removeAll(ordersToRemove);
+						ordersToRemove.clear();
 					}
-					ServerMailBox.this.orders.removeAll(ordersToRemove);
 				}
 			}	
 		}
